@@ -160,29 +160,37 @@ def process_data(orders, members, referrals_df):
     return orders, members, referrals_df
 
 # ============================================================
-# 데이터 로드 (파일 업로드 or 기본 파일)
+# 데이터 로드 (구글 드라이브에서 직접 다운로드)
 # ============================================================
-st.sidebar.markdown("## 📁 데이터")
-uploaded_file = st.sidebar.file_uploader("엑셀 파일 업로드", type=['xlsx'], help="회원정보, 주문내역, 추천인 시트가 포함된 엑셀 파일")
+import io
+import urllib.request
 
-if uploaded_file is not None:
-    orders_raw = pd.read_excel(uploaded_file, sheet_name='주문내역', header=1)
-    members_raw = pd.read_excel(uploaded_file, sheet_name='회원정보', header=1)
-    referrals_raw = pd.read_excel(uploaded_file, sheet_name='추천인', header=1)
-    orders, members, referrals_df = process_data(orders_raw, members_raw, referrals_raw)
-    st.sidebar.success(f"✅ 업로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건")
-else:
-    import os
-    default_path = 'data/B2B몰_데이터.xlsx'
-    if os.path.exists(default_path):
-        orders_raw = pd.read_excel(default_path, sheet_name='주문내역', header=1)
-        members_raw = pd.read_excel(default_path, sheet_name='회원정보', header=1)
-        referrals_raw = pd.read_excel(default_path, sheet_name='추천인', header=1)
-        orders, members, referrals_df = process_data(orders_raw, members_raw, referrals_raw)
-        st.sidebar.info("📌 기본 샘플 데이터 사용 중")
-    else:
-        st.warning("⚠️ 사이드바에서 엑셀 파일을 업로드해주세요.")
-        st.stop()
+GDRIVE_FILE_ID = '1Op9Y2FFb_aLQJKAcLyKj9HJQbK6YYnmf'
+GDRIVE_URL = f'https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}'
+
+@st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...")
+def load_from_gdrive():
+    response = urllib.request.urlopen(GDRIVE_URL)
+    file_bytes = io.BytesIO(response.read())
+    
+    orders_raw = pd.read_excel(file_bytes, sheet_name='주문내역', header=1)
+    file_bytes.seek(0)
+    members_raw = pd.read_excel(file_bytes, sheet_name='회원정보', header=1)
+    file_bytes.seek(0)
+    referrals_raw = pd.read_excel(file_bytes, sheet_name='추천인', header=1)
+    
+    return process_data(orders_raw, members_raw, referrals_raw)
+
+try:
+    orders, members, referrals_df = load_from_gdrive()
+    st.sidebar.success(f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건")
+except Exception as e:
+    st.error(f"❌ 데이터 로드 실패: {str(e)}\n\n구글 드라이브 파일 공유 설정을 확인해주세요.")
+    st.stop()
+
+if st.sidebar.button("🔄 데이터 새로고침"):
+    st.cache_data.clear()
+    st.rerun()
 
 st.sidebar.markdown("---")
 
