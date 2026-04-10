@@ -356,10 +356,10 @@ with tab3:
     top20['누적비중'] = (top20['매출'].cumsum()/ttl*100).round(1)
     
     fig = make_subplots(specs=[[{"secondary_y":True}]])
-    fig.add_trace(go.Bar(x=top20['상품명'].str[:18],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,
+    fig.add_trace(go.Bar(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,
                          hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>',
                          customdata=list(zip(top20['상품명'],[fmt_krw(v) for v in top20['매출']]))),secondary_y=False)
-    fig.add_trace(go.Scatter(x=top20['상품명'].str[:18],y=top20['누적비중'],name='누적 비중',
+    fig.add_trace(go.Scatter(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['누적비중'],name='누적 비중',
                              line=dict(color='#E8853D',width=3),mode='lines+markers',marker=dict(size=7),
                              hovertemplate='%{customdata}<br>누적 비중: %{y:.1f}%<extra></extra>',
                              customdata=top20['상품명'].tolist()),secondary_y=True)
