@@ -216,7 +216,7 @@ if selected_grade != "전체": filtered_members = filtered_members[filtered_memb
 # ============================================================
 # 헤더 & 탭
 # ============================================================
-    import base64, os
+import base64, os
 logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
 if os.path.exists(logo_path):
     with open(logo_path, 'rb') as f:
