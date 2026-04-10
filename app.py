@@ -28,6 +28,7 @@ html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 12px 24px; font-weight: 500; font-size: 0.95rem; }
 [data-testid="stSidebar"] { background: #f8fafc; }
+.js-plotly-plot .plotly .hoverlayer .hovertext { font-size: 14px !important; }
 div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px; }
 </style>
 """, unsafe_allow_html=True)
@@ -300,7 +301,7 @@ with tab2:
         tr.hovertemplate = '%{x}<br>' + tr.name + ': %{customdata}<extra></extra>'
     fig.update_layout(height=480,barmode='stack',
                       title=dict(text='회원구분별 × 월별 매출 추이',x=0.01,font=dict(size=17)),
-                      margin=dict(l=70,r=30,t=100,b=70),
+                      margin=dict(l=70,r=30,t=130,b=70),
                       legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),
                       xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
@@ -426,7 +427,7 @@ with tab4:
         tr.hovertemplate = '%{x}<br>' + tr.name + ': %{y:,}처<extra></extra>'
     fig.update_layout(height=480,barmode='stack',
                       title=dict(text='월별 신규가입자 추이 (회원타입별)',x=0.01,font=dict(size=17)),
-                      margin=dict(l=60,r=30,t=100,b=70),
+                      margin=dict(l=60,r=30,t=130,b=70),
                       legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),
                       xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
