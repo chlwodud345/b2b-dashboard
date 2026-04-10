@@ -117,16 +117,10 @@ def kpi_card(label, value, unit=""):
     """
 
 # ============================================================
-# 데이터 로드 & 전처리
+# 데이터 전처리 함수
 # ============================================================
 @st.cache_data
-def load_data():
-    FILE_PATH = 'data/B2B몰_데이터.xlsx'
-    
-    orders = pd.read_excel(FILE_PATH, sheet_name='주문내역', header=1)
-    members = pd.read_excel(FILE_PATH, sheet_name='회원정보', header=1)
-    referrals_df = pd.read_excel(FILE_PATH, sheet_name='추천인', header=1)
-    
+def process_data(orders, members, referrals_df):
     # 주문내역 전처리
     orders['주문일'] = pd.to_datetime(orders['주문일'], errors='coerce')
     orders['주문일자'] = orders['주문일'].dt.strftime('%Y-%m-%d')
@@ -165,7 +159,32 @@ def load_data():
     
     return orders, members, referrals_df
 
-orders, members, referrals_df = load_data()
+# ============================================================
+# 데이터 로드 (파일 업로드 or 기본 파일)
+# ============================================================
+st.sidebar.markdown("## 📁 데이터")
+uploaded_file = st.sidebar.file_uploader("엑셀 파일 업로드", type=['xlsx'], help="회원정보, 주문내역, 추천인 시트가 포함된 엑셀 파일")
+
+if uploaded_file is not None:
+    orders_raw = pd.read_excel(uploaded_file, sheet_name='주문내역', header=1)
+    members_raw = pd.read_excel(uploaded_file, sheet_name='회원정보', header=1)
+    referrals_raw = pd.read_excel(uploaded_file, sheet_name='추천인', header=1)
+    orders, members, referrals_df = process_data(orders_raw, members_raw, referrals_raw)
+    st.sidebar.success(f"✅ 업로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건")
+else:
+    import os
+    default_path = 'data/B2B몰_데이터.xlsx'
+    if os.path.exists(default_path):
+        orders_raw = pd.read_excel(default_path, sheet_name='주문내역', header=1)
+        members_raw = pd.read_excel(default_path, sheet_name='회원정보', header=1)
+        referrals_raw = pd.read_excel(default_path, sheet_name='추천인', header=1)
+        orders, members, referrals_df = process_data(orders_raw, members_raw, referrals_raw)
+        st.sidebar.info("📌 기본 샘플 데이터 사용 중")
+    else:
+        st.warning("⚠️ 사이드바에서 엑셀 파일을 업로드해주세요.")
+        st.stop()
+
+st.sidebar.markdown("---")
 
 # ============================================================
 # 사이드바 필터
