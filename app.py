@@ -257,23 +257,25 @@ with tab1:
     fig.update_yaxes(title_text="주문건수",tickfont=dict(size=11),secondary_y=True)
     st.plotly_chart(fig, use_container_width=True)
     
-    # 회원구분별 매출 (전체 너비 도넛)
-    ts_df = filtered.groupby('주문자 구분')['판매합계금액'].sum().reset_index()
-    ts_df.columns = ['구분','매출']
-    ts_df = ts_df.sort_values('매출',ascending=False)
-    fig = make_donut(ts_df, '구분', '매출', '회원구분별 매출 비중')
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # 지역별 매출 (전체 너비)
-    rg = filtered.groupby('지역')['판매합계금액'].sum().sort_values().reset_index()
-    rg.columns = ['지역','매출']
-    fig = px.bar(rg,x='매출',y='지역',orientation='h',color_discrete_sequence=COLORS)
-    fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),
-                      hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[fmt_krw(v) for v in rg['매출']])
-    fig.update_layout(height=500,title=dict(text='지역별 매출',x=0.01,font=dict(size=17)),
-                      margin=dict(l=70,r=100,t=100,b=40),showlegend=False,
-                      xaxis=dict(title='',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
-    st.plotly_chart(fig, use_container_width=True)
+    # 회원구분별 매출 + 지역별 매출 (한 줄)
+    cl,cr = st.columns(2)
+    with cl:
+        ts_df = filtered.groupby('주문자 구분')['판매합계금액'].sum().reset_index()
+        ts_df.columns = ['구분','매출']
+        ts_df = ts_df.sort_values('매출',ascending=False)
+        fig = make_donut(ts_df, '구분', '매출', '회원구분별 매출 비중')
+        fig.update_layout(height=520)
+        st.plotly_chart(fig, use_container_width=True)
+    with cr:
+        rg = filtered.groupby('지역')['판매합계금액'].sum().sort_values().reset_index()
+        rg.columns = ['지역','매출']
+        fig = px.bar(rg,x='매출',y='지역',orientation='h',color_discrete_sequence=COLORS)
+        fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),
+                          hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[fmt_krw(v) for v in rg['매출']])
+        fig.update_layout(height=520,title=dict(text='지역별 매출',x=0.01,font=dict(size=17)),
+                          margin=dict(l=70,r=100,t=90,b=40),showlegend=False,
+                          xaxis=dict(title='',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+        st.plotly_chart(fig, use_container_width=True)
     
     # 일별 매출 (전체 너비)
     daily = filtered.groupby('주문일자')['판매합계금액'].sum().reset_index()
