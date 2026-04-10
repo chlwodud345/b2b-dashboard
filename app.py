@@ -30,7 +30,8 @@ html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 12px 24px; font-weight: 500; font-size: 0.95rem; }
 [data-testid="stSidebar"] { background: #f8fafc; }
-.js-plotly-plot .plotly .hoverlayer .hovertext { font-size: 18px !important; transform: scale(1.3); }
+.js-plotly-plot .plotly .hoverlayer .hovertext text { font-size: 22px !important; }
+.js-plotly-plot .plotly .hoverlayer .hovertext path { stroke-width: 2px !important; }
 div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px; }
 </style>
 """, unsafe_allow_html=True)
