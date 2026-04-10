@@ -289,7 +289,7 @@ with tab1:
     tvals2, ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,title=dict(text='일별 매출 추이',x=0.01,font=dict(size=17)),
                       margin=dict(l=80,r=30,t=100,b=60),showlegend=False,
-                      xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13)),
+                      xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13),tickformat='%Y년 %m월'),
                       yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11),title_font=dict(size=13)))
     st.plotly_chart(fig, use_container_width=True)
 
