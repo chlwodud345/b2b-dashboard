@@ -424,6 +424,67 @@ with tab4:
     ]):
         col.markdown(kpi_card(l,v,u),unsafe_allow_html=True)
     
+    # ---- 회원 상세 검색 ----
+    st.markdown("#### 🔍 회원 상세 검색")
+    mem_search = st.text_input("상호명, 아이디, 담당자명으로 검색", key="member_detail_search", placeholder="예: 뉴케어, cs3, 홍길동")
+    
+    if mem_search:
+        # 회원정보 검색
+        mask = members.apply(lambda r: mem_search.lower() in str(r.get('상호명','')).lower()
+                             or mem_search.lower() in str(r.get('아이디','')).lower()
+                             or mem_search.lower() in str(r.get('담당자 이름','')).lower(), axis=1)
+        search_members = members[mask].copy()
+        
+        if len(search_members) == 0:
+            st.warning("검색 결과가 없습니다.")
+        else:
+            # 주문 집계 조인
+            order_agg = orders.groupby('주문자 ID').agg(
+                총매출=('판매합계금액','sum'),
+                주문건수=('주문 ID','nunique'),
+                첫주문일=('주문일자','min'),
+                최근주문일=('주문일자','max')
+            ).reset_index()
+            order_agg['객단가'] = (order_agg['총매출']/order_agg['주문건수']).round(0)
+            
+            # 주요 구매상품 (매출 TOP 3)
+            top_products = orders.groupby(['주문자 ID','상품명'])['판매합계금액'].sum().reset_index()
+            top_products = top_products.sort_values(['주문자 ID','판매합계금액'],ascending=[True,False])
+            top_products = top_products.groupby('주문자 ID').head(3)
+            top_products = top_products.groupby('주문자 ID')['상품명'].apply(lambda x: ' / '.join(x)).reset_index()
+            top_products.columns = ['주문자 ID','주요 구매상품']
+            
+            # 추천인 정보 조인 (사업자번호 기준)
+            ref_info = referrals_df.groupby('피추천인 사업자 번호').first()[['추천인','회원그룹']].reset_index()
+            ref_info.columns = ['사업자번호','추천인명','추천인유형']
+            
+            # 결합
+            result = search_members[['아이디','상호명','사업자번호','회원타입','회원등급','가입일','담당자 이름','휴대폰','주소']].copy()
+            result['가입일'] = result['가입일'].dt.strftime('%Y-%m-%d')
+            result = result.merge(order_agg, left_on='아이디', right_on='주문자 ID', how='left').drop(columns=['주문자 ID'],errors='ignore')
+            result = result.merge(top_products, left_on='아이디', right_on='주문자 ID', how='left').drop(columns=['주문자 ID'],errors='ignore')
+            result = result.merge(ref_info, on='사업자번호', how='left')
+            
+            # 정리
+            result['총매출'] = result['총매출'].fillna(0)
+            result['주문건수'] = result['주문건수'].fillna(0).astype(int)
+            result['객단가'] = result['객단가'].fillna(0)
+            result['주요 구매상품'] = result['주요 구매상품'].fillna('-')
+            result['추천인명'] = result['추천인명'].fillna('-')
+            result['추천인유형'] = result['추천인유형'].fillna('-')
+            
+            display_cols = ['아이디','상호명','담당자 이름','회원타입','회원등급','가입일',
+                           '총매출','주문건수','객단가','첫주문일','최근주문일','주요 구매상품',
+                           '추천인명','추천인유형','휴대폰','주소']
+            result = result[[c for c in display_cols if c in result.columns]]
+            result = result.sort_values('총매출',ascending=False)
+            
+            st.markdown(f"**검색 결과: {len(result)}건**")
+            st.dataframe(
+                result.style.format({'총매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),
+                use_container_width=True, height=400
+            )
+    
     # 월별 신규가입 (전체 너비)
     jm = filtered_members.groupby(['가입월','회원타입']).size().reset_index(name='가입자수')
     jm['가입월_kr'] = ym_series_kr(jm['가입월'])
