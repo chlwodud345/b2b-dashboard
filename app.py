@@ -113,17 +113,26 @@ def process_data(orders, members, referrals_df):
 GDRIVE_FILE_ID = '1Op9Y2FFb_aLQJKAcLyKj9HJQbK6YYnmf'
 def download_from_gdrive(file_id):
     session = requests.Session()
-    url = f'https://drive.google.com/uc?export=download&id={file_id}'
-    response = session.get(url, stream=True)
-    confirm_token = None
+    # 1차: confirm=t 방식 (대용량 파일 우회)
+    url = f'https://drive.google.com/uc?export=download&confirm=t&id={file_id}'
+    response = session.get(url, stream=True, timeout=120)
+    content = b''
+    for chunk in response.iter_content(chunk_size=1024*1024):
+        if chunk: content += chunk
+    # xlsx 검증 (PK 헤더)
+    if content[:4] == b'PK\x03\x04':
+        return io.BytesIO(content)
+    # 2차: 쿠키 방식
+    url2 = f'https://drive.google.com/uc?export=download&id={file_id}'
+    response = session.get(url2, stream=True, timeout=120)
     for key, value in response.cookies.items():
-        if key.startswith('download_warning'): confirm_token = value; break
-    if confirm_token:
-        response = session.get(f'https://drive.google.com/uc?export=download&confirm={confirm_token}&id={file_id}', stream=True)
-    content = response.content
-    if content[:4] != b'PK\x03\x04':
-        response = session.get(f'https://drive.google.com/uc?export=download&confirm=t&id={file_id}', stream=True)
-        content = response.content
+        if key.startswith('download_warning'):
+            url3 = f'https://drive.google.com/uc?export=download&confirm={value}&id={file_id}'
+            response = session.get(url3, stream=True, timeout=120)
+            break
+    content = b''
+    for chunk in response.iter_content(chunk_size=1024*1024):
+        if chunk: content += chunk
     return io.BytesIO(content)
 
 @st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...")
