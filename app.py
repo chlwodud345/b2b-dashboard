@@ -426,7 +426,7 @@ with tab6:
         fig.update_traces(text=[fmt_num(v) for v in cga['주문건수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{x}<br>주문: %{y:,}건<extra></extra>')
         fig.update_layout(height=420,margin=dict(l=60,r=20,t=30,b=40),showlegend=False,xaxis=dict(title='',tickfont=dict(size=12),categoryorder='array',categoryarray=grade_order),yaxis=dict(title='주문건수',tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
-     st.markdown("#### 케어포 월별 매출 추이")
+    st.markdown("#### 케어포 월별 매출 추이")
     cf_monthly=co.groupby('주문월')['판매합계금액'].sum().reset_index(); cf_monthly['주문월_kr'] = ym_series_kr(cf_monthly['주문월'])
     tvals_cfm, ttexts_cfm = krw_tickvals(cf_monthly['판매합계금액'])
     fig=go.Figure()
