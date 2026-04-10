@@ -10,6 +10,8 @@ import requests
 st.set_page_config(page_title="대상웰라이프 B2B몰 대시보드", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
 COLORS = ['#3366CC','#E8853D','#27AE60','#9B59B6','#E74C3C','#1ABC9C','#F39C12','#2980B9','#8E44AD','#D35400']
+# 호버 전역 설정
+HOVER_FONT = dict(font=dict(size=16, family='Noto Sans KR'))
 
 # ============================================================
 # CSS
@@ -28,7 +30,7 @@ html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
 .stTabs [data-baseweb="tab-list"] { gap: 4px; }
 .stTabs [data-baseweb="tab"] { padding: 12px 24px; font-weight: 500; font-size: 0.95rem; }
 [data-testid="stSidebar"] { background: #f8fafc; }
-.js-plotly-plot .plotly .hoverlayer .hovertext { font-size: 60px !important; }
+.js-plotly-plot .plotly .hoverlayer .hovertext { font-size: 18px !important; transform: scale(1.3); }
 div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px; }
 </style>
 """, unsafe_allow_html=True)
