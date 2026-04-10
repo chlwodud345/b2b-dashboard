@@ -244,7 +244,7 @@ with tab1:
     fig.add_trace(go.Bar(x=monthly['주문월_kr'],y=monthly['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,
                          text=[fmt_krw_short(v) for v in monthly['매출']],textposition='outside',textfont=dict(size=11),
                          hovertemplate='%{x}<br>매출: %{customdata}<extra></extra>',
-                         customdata=[fmt_krw(v) for v in monthly['매출']]),secondary_y=False)
+                         customdata=[f"{v:,.0f}원" for v in monthly['매출']]),secondary_y=False)
     fig.add_trace(go.Scatter(x=monthly['주문월_kr'],y=monthly['주문건수'],name='주문건수',
                              line=dict(color='#E8853D',width=3),mode='lines+markers',marker=dict(size=8),
                              hovertemplate='%{x}<br>주문: %{y:,}건<extra></extra>'),secondary_y=True)
