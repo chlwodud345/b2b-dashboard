@@ -163,21 +163,46 @@ def process_data(orders, members, referrals_df):
 # 데이터 로드 (구글 드라이브에서 직접 다운로드)
 # ============================================================
 import io
-import urllib.request
+import requests
 
 GDRIVE_FILE_ID = '1Op9Y2FFb_aLQJKAcLyKj9HJQbK6YYnmf'
-GDRIVE_URL = f'https://drive.google.com/uc?export=download&id={GDRIVE_FILE_ID}'
+
+def download_from_gdrive(file_id):
+    """구글 드라이브 대용량 파일 다운로드 (바이러스 검사 우회)"""
+    session = requests.Session()
+    url = f'https://drive.google.com/uc?export=download&id={file_id}'
+    
+    response = session.get(url, stream=True)
+    
+    # 대용량 파일: 바이러스 검사 확인 페이지 우회
+    confirm_token = None
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            confirm_token = value
+            break
+    
+    if confirm_token:
+        url = f'https://drive.google.com/uc?export=download&confirm={confirm_token}&id={file_id}'
+        response = session.get(url, stream=True)
+    
+    # 그래도 HTML이 반환되면 confirm=t 방식 시도
+    content = response.content
+    if content[:4] != b'PK\x03\x04':  # xlsx는 ZIP 형식이라 PK로 시작
+        url = f'https://drive.google.com/uc?export=download&confirm=t&id={file_id}'
+        response = session.get(url, stream=True)
+        content = response.content
+    
+    return io.BytesIO(content)
 
 @st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...")
 def load_from_gdrive():
-    response = urllib.request.urlopen(GDRIVE_URL)
-    file_bytes = io.BytesIO(response.read())
+    file_bytes = download_from_gdrive(GDRIVE_FILE_ID)
     
-    orders_raw = pd.read_excel(file_bytes, sheet_name='주문내역', header=1)
+    orders_raw = pd.read_excel(file_bytes, sheet_name='주문내역', header=1, engine='openpyxl')
     file_bytes.seek(0)
-    members_raw = pd.read_excel(file_bytes, sheet_name='회원정보', header=1)
+    members_raw = pd.read_excel(file_bytes, sheet_name='회원정보', header=1, engine='openpyxl')
     file_bytes.seek(0)
-    referrals_raw = pd.read_excel(file_bytes, sheet_name='추천인', header=1)
+    referrals_raw = pd.read_excel(file_bytes, sheet_name='추천인', header=1, engine='openpyxl')
     
     return process_data(orders_raw, members_raw, referrals_raw)
 
