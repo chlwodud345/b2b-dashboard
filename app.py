@@ -97,7 +97,7 @@ def make_donut(df, name_col, value_col, title, colors=None):
         insidetextorientation='horizontal',
         textfont=dict(size=11),
         hovertemplate='%{label}<br>매출: %{customdata}<br>비중: %{percent}<extra></extra>',
-        customdata=[fmt_krw(v) for v in df[value_col]],
+        customdata=[f"{v:,.0f}원" for v in df[value_col]],
     ))
     fig.add_annotation(
         text=f"<b>합계</b><br>{fmt_krw(total)}",
