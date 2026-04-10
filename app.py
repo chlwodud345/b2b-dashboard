@@ -276,12 +276,10 @@ with tab1:
     daily.columns = ['날짜','매출']
     daily['날짜_kr'] = daily['날짜'].apply(to_date_kr)
     fig = px.area(daily,x='날짜',y='매출',color_discrete_sequence=['#3366CC'])
-    fig.update_traces(hovertemplate='%{customdata}<br>매출: %{customdata2}<extra></extra>',
-                      customdata=daily['날짜_kr'],customdata2=[fmt_krw(v) for v in daily['매출']])
-    # customdata2는 plotly에서 지원 안하므로 hovertemplate 수정
-    fig.update_traces(hovertemplate=None)
-    hover_texts = [f"{to_date_kr(d)}<br>매출: {fmt_krw(s)}" for d,s in zip(daily['날짜'],daily['매출'])]
-    fig.update_traces(hovertemplate='%{text}<extra></extra>', text=hover_texts)
+    fig.update_traces(
+        customdata=list(zip(daily['날짜'].apply(to_date_kr), [fmt_krw(v) for v in daily['매출']])),
+        hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>'
+    )
     tvals2, ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,title=dict(text='일별 매출 추이',x=0.01,font=dict(size=17)),
                       margin=dict(l=80,r=30,t=100,b=60),showlegend=False,
