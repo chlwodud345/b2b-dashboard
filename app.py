@@ -216,7 +216,37 @@ if selected_grade != "전체": filtered_members = filtered_members[filtered_memb
 # ============================================================
 # 헤더 & 탭
 # ============================================================
-st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
+import base64, os
+logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
+if os.path.exists(logo_path):
+    with open(logo_path, 'rb') as f:
+        logo_b64 = base64.b64encode(f.read()).decode()
+    st.markdown(f'''
+    <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <h1>📊 대상웰라이프 B2B몰 대시보드</h1>
+            <p>Sales & Operations Analytics</p>
+        </div>
+        <img src="data:image/png;base64,{logo_b64}" style="height:50px;object-fit:contain;">
+    </div>
+    ''', unsafe_allow_html=True)
+else:
+    import base64, os
+logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
+if os.path.exists(logo_path):
+    with open(logo_path, 'rb') as f:
+        logo_b64 = base64.b64encode(f.read()).decode()
+    st.markdown(f'''
+    <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+            <h1>📊 대상웰라이프 B2B몰 대시보드</h1>
+            <p>Sales & Operations Analytics</p>
+        </div>
+        <img src="data:image/png;base64,{logo_b64}" style="height:50px;object-fit:contain;">
+    </div>
+    ''', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 종합 현황","💰 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","💚 케어포 멤버십"])
 
 # ============================================================
