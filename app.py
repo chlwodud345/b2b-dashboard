@@ -410,21 +410,6 @@ with tab6:
     cols=st.columns(4)
     for col,(l,v,u) in zip(cols,[("케어포 총 회원",fmt_num(len(cmb)),"처"),("케어포 신규가입",fmt_num(len(cf_filtered)),"처"),("케어포 주문회원",fmt_num(co['주문자 ID'].nunique()),"처"),("케어포 재구매율",fmt_pct(crr),"")]): col.markdown(kpi_card(l,v,u),unsafe_allow_html=True)
     st.markdown("#### 케어포 등급별 매출 · 주문")
-    grade_order = ['시설','공생','주야간','방문','일반','보호자','종사자']
-    cga=co.groupby('회원 등급').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique')).reset_index(); cga['등급']=cga['회원 등급'].str.replace('케어포-','')
-    cga['등급'] = pd.Categorical(cga['등급'], categories=grade_order, ordered=True); cga = cga.sort_values('등급')
-    tvals_cf, ttexts_cf = krw_tickvals(cga['매출'])
-    c1,c2 = st.columns(2)
-    with c1:
-        fig = px.bar(cga,x='등급',y='매출',color_discrete_sequence=['#3366CC'])
-        fig.update_traces(text=[fmt_krw_short(v) for v in cga['매출']],textposition='outside',textfont=dict(size=10),hovertemplate='%{x}<br>매출: %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in cga['매출']])
-        fig.update_layout(height=420,margin=dict(l=60,r=20,t=30,b=40),showlegend=False,xaxis=dict(title='',tickfont=dict(size=12),categoryorder='array',categoryarray=grade_order),yaxis=dict(title='매출액',tickvals=tvals_cf,ticktext=ttexts_cf,tickfont=dict(size=11)))
-        st.plotly_chart(fig, use_container_width=True)
-    with c2:
-        fig = px.bar(cga,x='등급',y='주문건수',color_discrete_sequence=['#E8853D'])
-        fig.update_traces(text=[fmt_num(v) for v in cga['주문건수']],textposition='outside',textfont=dict(size=10),hovertemplate='%{x}<br>주문: %{y:,}건<extra></extra>')
-        fig.update_layout(height=420,margin=dict(l=60,r=20,t=30,b=40),showlegend=False,xaxis=dict(title='',tickfont=dict(size=12),categoryorder='array',categoryarray=grade_order),yaxis=dict(title='주문건수',tickfont=dict(size=11)))
-        st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 케어포 전용 상품 매출 추이")
     cpd=co[co['상품명'].str.contains(r'\[케어포',na=False)]; cpm=cpd.groupby('주문월')['판매합계금액'].sum().reset_index(); cpm['주문월_kr'] = ym_series_kr(cpm['주문월'])
     fig=px.area(cpm,x='주문월_kr',y='판매합계금액',color_discrete_sequence=['#27AE60'])
