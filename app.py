@@ -426,7 +426,7 @@ with tab4:
     
     # ---- 회원 상세 검색 ----
     st.markdown("#### 🔍 회원 상세 검색")
-    mem_search = st.text_input("상호명, 아이디, 담당자명으로 검색", key="member_detail_search", placeholder="예: 뉴케어, cs3, 홍길동")
+    mem_search = st.text_input("상호명, 아이디, 담당자명으로 검색", key="member_detail_search", placeholder="예: 대상병원, 대상요양원, 대상주야간보호센터 등")
     
     if mem_search:
         # 회원정보 검색
