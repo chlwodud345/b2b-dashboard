@@ -333,7 +333,7 @@ with tab2:
                                       text=[[fmt_krw_short(v) for v in row] for row in hmp.values],
                                       texttemplate='%{text}',textfont=dict(size=12),
                                       hovertemplate='%{y} %{x}<br>매출: %{customdata}<extra></extra>',
-                                      customdata=[[fmt_krw(v) for v in row] for row in hmp.values]))
+                                      customdata=[[f"{v:,.0f}원" for v in row] for row in hmp.values]))
     fig.update_layout(height=320,margin=dict(l=50,r=20,t=30,b=40),
                       xaxis=dict(tickfont=dict(size=11)),yaxis=dict(tickfont=dict(size=12),autorange='reversed'))
     st.plotly_chart(fig, use_container_width=True)
