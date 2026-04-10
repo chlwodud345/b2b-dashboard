@@ -331,7 +331,7 @@ with tab2:
     fig = go.Figure(data=go.Heatmap(z=hmp.values,x=[f'{h}시' for h in hmp.columns],y=hmp.index,
                                       colorscale=[[0,'#F0F2F5'],[0.5,'#6B9BD2'],[1,'#1B2A4A']],
                                       text=[[fmt_krw_short(v) for v in row] for row in hmp.values],
-                                      texttemplate='%{text}',textfont=dict(size=9),
+                                      texttemplate='%{text}',textfont=dict(size=12),
                                       hovertemplate='%{y} %{x}<br>매출: %{customdata}<extra></extra>',
                                       customdata=[[fmt_krw(v) for v in row] for row in hmp.values]))
     fig.update_layout(height=320,margin=dict(l=50,r=20,t=30,b=40),
