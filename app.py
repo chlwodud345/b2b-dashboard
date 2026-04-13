@@ -219,8 +219,14 @@ def normalize_name(name):
 def name_similarity(a, b):
     """두 상호명의 유사도 점수 (0~100)"""
     if not a or not b: return 0
+    import re
     # 완전 일치
     if a == b: return 100
+    # 의료기관 접미어 제거 후 비교
+    suffixes = r'(한의원|의원|병원|클리닉|약국|요양원|의료원|보건소|한방병원|치과)$'
+    a_stripped = re.sub(suffixes, '', a)
+    b_stripped = re.sub(suffixes, '', b)
+    if a_stripped and b_stripped and a_stripped == b_stripped: return 98
     # 포함 관계
     if a in b or b in a:
         return int(min(len(a), len(b)) / max(len(a), len(b)) * 100)
