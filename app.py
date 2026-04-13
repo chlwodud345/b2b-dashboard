@@ -185,7 +185,8 @@ def load_from_gdrive():
     r = pd.read_excel(fb, sheet_name='추천인', header=1, engine='openpyxl'); fb.seek(0)
     # BW 시트 로드
     try:
-        bw_raw = pd.read_excel(fb, sheet_name='BW', header=0, engine='openpyxl')
+        bw_raw = pd.read_excel(fb, sheet_name='BW', header=0, engine='openpyxl', 
+                        dtype={'달력 연도/월': str})
         bw = process_bw(bw_raw)
     except Exception:
         bw = pd.DataFrame()
