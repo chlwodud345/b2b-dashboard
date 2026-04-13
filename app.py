@@ -395,7 +395,7 @@ if os.path.exists(logo_path):
 else:
     st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📋 종합 현황","💰 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","🩺 케어포 멤버십","📈 손익 분석","🏥 일차의료 시범기관"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📋 종합 현황","💵 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","🤝 케어포 멤버십","📈 손익 분석","🏥 일차의료 시범기관"])
 
 # ============================================================
 # Tab 1. 종합 현황
