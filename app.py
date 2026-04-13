@@ -1179,8 +1179,9 @@ with tab8:
         region_all = pf['시도'].value_counts().reset_index()
         region_all.columns = ['지역', '시범기관수']
         if not match_df.empty:
-            region_matched = match_df.groupby(match_df['주소_공공'].fillna('').str.split().str[0]).size().reset_index(name='가입기관수')
-            region_matched.columns = ['지역', '가입기관수']
+            region_matched = match_df.copy()
+            region_matched['지역'] = region_matched['주소_공공'].apply(normalize_sido)
+            region_matched = region_matched.groupby('지역').size().reset_index(name='가입기관수')
             region_all = region_all.merge(region_matched, on='지역', how='left')
         else:
             region_all['가입기관수'] = 0
