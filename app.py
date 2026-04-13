@@ -1209,8 +1209,14 @@ with tab8:
             if len(top_dedup) > 0:
                 top_dedup = top_dedup.sort_values('총매출', ascending=True)
                 # 사업유형별 색상
-                type_colors = {'만성질환관리': '#3366CC', '방문진료': '#E8853D', '한의방문진료': '#27AE60'}
-                bar_colors = [type_colors.get(t.split('/')[0], '#3366CC') for t in top_dedup['사업유형목록']]
+                type_colors = {
+                    '만성질환관리': '#3366CC',
+                    '방문진료': '#E8853D',
+                    '한의방문진료': '#27AE60',
+                    '만성질환관리/방문진료': '#9B59B6',
+                    '만성질환관리/한의방문진료': '#1ABC9C',
+                }
+                bar_colors = [type_colors.get(t, '#3366CC') for t in top_dedup['사업유형목록']]
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
                     x=top_dedup['총매출'].values, y=top_dedup['상호명_B2B'].values,
@@ -1220,8 +1226,11 @@ with tab8:
                     customdata=list(zip([fmt_krw(v) for v in top_dedup['총매출']], top_dedup['사업유형목록']))
                 ))
                 top_tvals, top_ttexts = krw_tickvals(top_dedup['총매출'])
+                for label, color in [('만성질환관리','#3366CC'),('방문진료','#E8853D'),('한의방문진료','#27AE60'),('만성질환관리/방문진료','#9B59B6'),('만성질환관리/한의방문진료','#1ABC9C')]:
+                    fig.add_trace(go.Bar(x=[None], y=[None], marker_color=color, name=label, showlegend=True))
                 fig.update_layout(height=max(450, len(top_dedup) * 28 + 140), margin=dict(l=180, r=80, t=30, b=40),
-                    showlegend=False,
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11), title_text='사업유형'),
                     xaxis=dict(title='매출액', tickvals=top_tvals, ticktext=top_ttexts, tickfont=dict(size=11)),
                     yaxis=dict(title='', tickfont=dict(size=10)))
                 st.plotly_chart(fig, use_container_width=True, key="pilot_top20")
