@@ -212,8 +212,10 @@ def normalize_name(name):
     s = str(name).strip()
     s = re.sub(r'[\s\(\)·\-\.\,\']', '', s)
     # 법인명 접두어 제거
-    for prefix in ['의료법인','사회복지법인','재단법인','학교법인','(의)','(사)','(재)']:
-        s = s.replace(prefix.replace('(','').replace(')',''), '')
+    for prefix in ['의료법인','사회복지법인','재단법인','학교법인']:
+        s = s.replace(prefix, '')
+    for char in ['의','사','재']:
+        pass  # 단일 글자 제거는 하지 않음 (부작용 방지)
     return s
 
 def name_similarity(a, b):
