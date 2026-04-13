@@ -1217,26 +1217,6 @@ with tab8:
                     yaxis=dict(title='', tickfont=dict(size=10)))
                 st.plotly_chart(fig, use_container_width=True, key="pilot_top20")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("#### 매칭 기관 회원타입별 매출")
-                type_rev = match_df.groupby('회원타입')['총매출'].sum().reset_index().sort_values('총매출', ascending=False)
-                type_rev.columns = ['회원타입', '매출']
-                type_rev = type_rev[type_rev['매출'] > 0]
-                if len(type_rev) > 0:
-                    fig = make_donut(type_rev, '회원타입', '매출')
-                    fig.update_layout(height=450)
-                    st.plotly_chart(fig, use_container_width=True, key="pilot_type_donut")
-            with c2:
-                st.markdown("#### 매칭 기관 회원등급별 매출")
-                grade_rev = match_df.groupby('회원등급')['총매출'].sum().reset_index().sort_values('총매출', ascending=False)
-                grade_rev.columns = ['회원등급', '매출']
-                grade_rev = grade_rev[grade_rev['매출'] > 0]
-                if len(grade_rev) > 0:
-                    fig = make_donut(grade_rev, '회원등급', '매출')
-                    fig.update_layout(height=450)
-                    st.plotly_chart(fig, use_container_width=True, key="pilot_grade_donut")
-
         # --- 매칭 상세 테이블 ---
         st.markdown("#### 매칭 기관 상세")
         match_filter = st.selectbox("매칭등급 필터", ["전체", "확정", "후보"], key="pilot_match_filter")
