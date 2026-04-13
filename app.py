@@ -211,8 +211,9 @@ def load_chronic_care_clinics():
     
     # 매칭용 정규화 컬럼
     import re
-    df['전화번호_norm'] = df['전화번호'].astype(str).apply(lambda x: re.sub(r'[^0-9]', '', x))
-    df['기관명_norm'] = df['기관명'].astype(str).apply(lambda x: re.sub(r'[\s\(\)·\-]', '', x))
+    df['전화번호_norm'] = df['전화번호'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
+    df['기관명_norm'] = df['기관명'].fillna('').astype(str).str.replace(r'[\s\(\)·\-]', '', regex=True)
+
     
     def extract_region(addr):
         if pd.isna(addr) or not addr: return ('', '')
@@ -235,8 +236,8 @@ def match_chronic_care(chronic_df, members_df, orders_df):
         return pd.DataFrame()
     
     mem = members_df.copy()
-    mem['전화번호_norm'] = mem['휴대폰'].astype(str).apply(lambda x: re.sub(r'[^0-9]', '', x))
-    mem['상호명_norm'] = mem['상호명'].astype(str).apply(lambda x: re.sub(r'[\s\(\)·\-]', '', x))
+    mem['전화번호_norm'] = mem['휴대폰'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
+    mem['상호명_norm'] = mem['상호명'].fillna('').astype(str).str.replace(r'[\s\(\)·\-]', '', regex=True)
     
     def extract_region(addr):
         if pd.isna(addr) or not addr: return ('', '')
