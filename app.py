@@ -312,19 +312,19 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
 
     # 수동 매칭 (자동 매칭이 어려운 예외 케이스)
     MANUAL_MATCH = {
-        '건강드림내과의원': 'happydream',  # 실제 B2B 아이디로 교체
-        '구로연세의원': 'kuroyonsei',
-        '상인내과의원': 'sangin',
-        '서울배내과의원': 'flowerbae',
-        '성모가정의학과의원': 'fmkjm4',
-        '아세아연합의원': 'hyyk1213',
-        '웰봄내과의원': 'wbch01739',
-        '이시아연합속내과의원': 'stereon',
-        '차만진가정의학과의원': 'sssky91',
-        '참사랑내과의원': 'jhs7575',
-        '첨단가족연합의원': 'tontokim',
-        '하늘내과의원': 'skymed0813',
-        '한양류마유내과의원': 'hyrmu',
+        ('건강드림내과의원', '경기', '평택시'): 'happydream',
+        ('구로연세의원', '서울', '구로구'): 'kuroyonsei',
+        ('상인내과의원', '대구', '달서구'): 'sangin',
+        ('서울배내과의원', '서울', '강남구'): 'flowerbae',
+        ('성모가정의학과의원', '인천', '남동구'): 'fmkjm4',
+        ('아세아연합의원', '대구', '서구'): 'hyyk1213',
+        ('웰봄내과의원', '경기', '오산시'): 'wbch01739',
+        ('이시아연합속내과의원', '대구', '동구'): 'stereon',
+        ('차만진가정의학과의원', '광주', '북구'): 'sssky91',
+        ('참사랑내과의원', '경남', '하동군'): 'jhs7575',
+        ('첨단가족연합의원', '광주', '북구'): 'tontokim',
+        ('하늘내과의원', '전북', '전주시'): 'skymed0813',
+        ('한양류마유내과의원', '경기', '화성시'): 'hyrmu',
     }
 
     mem = members_df.copy()
@@ -348,7 +348,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
     # --- Step 0: 수동 매칭 ---
     mem_by_id = mem.set_index('아이디')
     for idx, row in pilot_df.iterrows():
-        bid = MANUAL_MATCH.get(row['기관명'])
+        bid = MANUAL_MATCH.get((row['기관명'], row['시도'], row['시군구']))
         if bid and bid in mem_by_id.index:
             m = mem_by_id.loc[bid]
             results.append({
