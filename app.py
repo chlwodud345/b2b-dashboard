@@ -1220,7 +1220,7 @@ with tab8:
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
                     x=top_dedup['총매출'].values, y=top_dedup['상호명_B2B'].values,
-                    orientation='h', marker_color=bar_colors,
+                    orientation='h', marker_color=bar_colors, showlegend=False,
                     text=[fmt_krw_short(v) for v in top_dedup['총매출']], textposition='outside', textfont=dict(size=10),
                     hovertemplate='%{y}<br>매출: %{customdata[0]}<br>사업유형: %{customdata[1]}<extra></extra>',
                     customdata=list(zip([fmt_krw(v) for v in top_dedup['총매출']], top_dedup['사업유형목록']))
