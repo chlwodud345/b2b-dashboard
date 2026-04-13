@@ -205,6 +205,12 @@ def extract_sigungu(addr):
     parts = str(addr).strip().split()
     return parts[1] if len(parts) > 1 else ''
 
+def extract_road(addr):
+    """주소에서 도로명 추출 (3번째 단어)"""
+    if pd.isna(addr) or not addr: return ''
+    parts = str(addr).strip().split()
+    return parts[2] if len(parts) > 2 else ''
+
 def normalize_name(name):
     """상호명 정규화: 공백, 특수문자, 접미어 제거"""
     if pd.isna(name) or not name: return ''
