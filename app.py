@@ -231,8 +231,7 @@ def normalize_name(name):
     if pd.isna(name) or not name: return ''
     import re
     s = str(name).strip()
-    s = re.sub(r'\([^)]*\)', '', s)  # 괄호+내용 통째 제거
-    s = re.sub(r'[\s·\-\.\,\']', '', s)  # 나머지 특수문자 제거
+    s = re.sub(r'[\s\(\)·\-\.\,\']', '', s)
     # 법인명 접두어 제거
     for prefix in ['의료법인','사회복지법인','재단법인','학교법인']:
         s = s.replace(prefix, '')
