@@ -35,14 +35,18 @@ div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px
 
 def fmt_krw(n):
     if pd.isna(n) or n == 0: return "0원"
-    if abs(n) >= 1e8: return f"{n/1e8:.1f}억원"
-    if abs(n) >= 1e4: return f"{n/1e4:,.0f}만원"
-    return f"{n:,.0f}원"
+    sign = '' if n >= 0 else '-'
+    a = abs(n)
+    if a >= 1e8: return f"{sign}{a/1e8:.1f}억원"
+    if a >= 1e4: return f"{sign}{a/1e4:,.0f}만원"
+    return f"{sign}{a:,.0f}원"
 def fmt_krw_short(n):
     if pd.isna(n) or n == 0: return "0"
-    if abs(n) >= 1e8: return f"{n/1e8:.1f}억"
-    if abs(n) >= 1e4: return f"{n/1e4:,.0f}만"
-    return f"{n:,.0f}"
+    sign = '' if n >= 0 else '-'
+    a = abs(n)
+    if a >= 1e8: return f"{sign}{a/1e8:.1f}억"
+    if a >= 1e4: return f"{sign}{a/1e4:,.0f}만"
+    return f"{sign}{a:,.0f}"
 def fmt_num(n):
     if pd.isna(n): return "0"
     return f"{n:,.0f}"
@@ -82,6 +86,9 @@ def make_donut(df, name_col, value_col, colors=None):
         legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=11), traceorder='normal'), showlegend=True)
     return fig
 
+# ============================================================
+# 데이터 전처리
+# ============================================================
 @st.cache_data
 def process_data(orders, members, referrals_df):
     orders['주문일'] = pd.to_datetime(orders['주문일'], errors='coerce')
@@ -110,6 +117,54 @@ def process_data(orders, members, referrals_df):
     referrals_df['피추천인 사업자 번호'] = referrals_df['피추천인 사업자 번호'].astype(str).str.replace('-','').str.strip()
     return orders, members, referrals_df
 
+@st.cache_data
+def process_bw(bw_raw):
+    bw = bw_raw.copy()
+    # 컬럼명 정리 (줄바꿈 제거)
+    bw.columns = [c.replace('\n','').strip() for c in bw.columns]
+    # 달력 연도/월 → 문자열 YYYY-MM
+    def parse_ym(val):
+        if pd.isna(val): return None
+        s = str(val).strip()
+        if '.' in s:
+            parts = s.split('.')
+            y = parts[0]
+            m = parts[1].zfill(2)
+            return f"{y}-{m}"
+        return s
+    bw['연월'] = bw['달력 연도/월'].apply(parse_ym)
+    bw['연도'] = bw['연월'].str[:4]
+    bw['월'] = bw['연월'].str[5:7].astype(int, errors='ignore')
+    # 고객명 → 채널 라벨 매핑
+    def customer_label(name):
+        s = str(name).strip()
+        parts = s.split(',')
+        if len(parts) == 1: return '일반'
+        ref_map = {'영':'영업','대':'대리점','케':'케어포'}
+        mem_map = {'의':'의료기','장':'장기요양','병':'병원','약':'약국','크':'염증성장질환','종':'종사자'}
+        if len(parts) == 2:
+            return ref_map.get(parts[1].strip(), parts[1].strip())
+        if len(parts) == 3:
+            p1 = parts[1].strip()
+            p2 = parts[2].strip()
+            if p2 == '종':
+                prefix = mem_map.get(p1, ref_map.get(p1, p1))
+                return f"{prefix}-종사자"
+            r = ref_map.get(p1, p1)
+            m = mem_map.get(p2, p2)
+            return f"{r}-{m}"
+        return s
+    bw['채널'] = bw['고객명'].apply(customer_label)
+    # 기타판관비 계산
+    bw['기타판관비'] = bw['IV.판매비 및 관리비'] - bw['IV.6.광고선전비'] - bw['IV.7.운반비'] - bw['IV.8.판매수수료'] - bw['IV.9.판촉비']
+    # 이익률 계산
+    bw['매출총이익률'] = np.where(bw['I.매출액(FI기준)'] != 0, bw['III.매출총이익'] / bw['I.매출액(FI기준)'] * 100, 0)
+    bw['영업이익률'] = np.where(bw['I.매출액(FI기준)'] != 0, bw['V.영업이익I'] / bw['I.매출액(FI기준)'] * 100, 0)
+    return bw
+
+# ============================================================
+# 데이터 로드 (구글 드라이브)
+# ============================================================
 GDRIVE_FILE_ID = '1Op9Y2FFb_aLQJKAcLyKj9HJQbK6YYnmf'
 def download_from_gdrive(file_id):
     import gdown
@@ -127,12 +182,22 @@ def load_from_gdrive():
     fb = download_from_gdrive(GDRIVE_FILE_ID)
     o = pd.read_excel(fb, sheet_name='주문내역', header=1, engine='openpyxl'); fb.seek(0)
     m = pd.read_excel(fb, sheet_name='회원정보', header=1, engine='openpyxl'); fb.seek(0)
-    r = pd.read_excel(fb, sheet_name='추천인', header=1, engine='openpyxl')
-    return process_data(o, m, r)
+    r = pd.read_excel(fb, sheet_name='추천인', header=1, engine='openpyxl'); fb.seek(0)
+    # BW 시트 로드
+    try:
+        bw_raw = pd.read_excel(fb, sheet_name='BW', header=0, engine='openpyxl')
+        bw = process_bw(bw_raw)
+    except Exception:
+        bw = pd.DataFrame()
+    orders, members, referrals_df = process_data(o, m, r)
+    return orders, members, referrals_df, bw
 
 try:
-    orders, members, referrals_df = load_from_gdrive()
-    st.sidebar.success(f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건")
+    orders, members, referrals_df, bw_data = load_from_gdrive()
+    sidebar_msg = f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건"
+    if len(bw_data) > 0:
+        sidebar_msg += f"\n- BW손익: {len(bw_data):,}건"
+    st.sidebar.success(sidebar_msg)
 except Exception as e:
     st.error(f"❌ 데이터 로드 실패: {str(e)}\n\n구글 드라이브 파일 공유 설정을 확인해주세요.")
     st.stop()
@@ -169,6 +234,12 @@ if selected_months: filtered_members = filtered_members[filtered_members['가입
 if selected_types: filtered_members = filtered_members[filtered_members['회원타입'].isin(selected_types)]
 if selected_grades: filtered_members = filtered_members[filtered_members['회원등급'].isin(selected_grades)]
 
+# BW 필터 (연도/월만 적용)
+bw_filtered = bw_data.copy()
+if len(bw_filtered) > 0:
+    if selected_years: bw_filtered = bw_filtered[bw_filtered['연도'].isin(selected_years)]
+    if selected_months: bw_filtered = bw_filtered[bw_filtered['월'].isin([int(m.replace('월','')) for m in selected_months])]
+
 import base64, os
 logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
 if os.path.exists(logo_path):
@@ -177,8 +248,12 @@ if os.path.exists(logo_path):
     st.markdown(f'<div class="main-header" style="display:flex;align-items:center;justify-content:space-between;"><div><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div><img src="data:image/png;base64,{logo_b64}" style="height:50px;object-fit:contain;"></div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📋 종합 현황","💰 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","💚 케어포 멤버십"])
 
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📋 종합 현황","💰 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","💚 케어포 멤버십","📈 손익 분석"])
+
+# ============================================================
+# Tab 1. 종합 현황
+# ============================================================
 with tab1:
     ts = filtered['판매합계금액'].sum(); to_ = filtered['주문 ID'].nunique(); tb = filtered['주문자 ID'].nunique()
     tm = len(members); nm = len(filtered_members); ao = ts/to_ if to_>0 else 0
@@ -217,6 +292,9 @@ with tab1:
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11),title_font=dict(size=13)))
     st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# Tab 2. 매출 분석
+# ============================================================
 with tab2:
     st.markdown("#### 회원구분별 × 월별 매출 추이")
     tm_df = filtered.groupby(['주문월','주문자 구분'])['판매합계금액'].sum().reset_index(); tm_df['주문월_kr'] = ym_series_kr(tm_df['주문월'])
@@ -245,6 +323,9 @@ with tab2:
     if search: ba = ba[ba.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
     st.dataframe(ba.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
 
+# ============================================================
+# Tab 3. 상품 분석
+# ============================================================
 with tab3:
     pa = filtered.groupby(['상품명','상품 코드']).agg(매출=('판매합계금액','sum'),수량=('주문 수량','sum'),주문건수=('주문 ID','nunique')).reset_index().sort_values('매출',ascending=False)
     st.markdown("#### 상품별 매출 TOP 20 (파레토 차트)")
@@ -277,6 +358,9 @@ with tab3:
         fig.update_layout(height=480,margin=dict(l=70,r=30,t=30,b=120),legend=dict(orientation="h",yanchor="top",y=-0.15,x=0,font=dict(size=10)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# Tab 4. 회원 분석
+# ============================================================
 with tab4:
     mo_df = orders.groupby('주문자 ID').agg(첫주문일=('주문일','min'),주문건수=('주문 ID','nunique'),주문월수=('주문월','nunique')).reset_index()
     conv = members[members['아이디'].isin(orders['주문자 ID'].unique())]; conv_r = len(conv)/len(members)*100 if len(members)>0 else 0
@@ -356,6 +440,9 @@ with tab4:
         fig.update_layout(height=max(400,len(rd)*32+140),margin=dict(l=190,r=20,t=20,b=50),yaxis=dict(tickfont=dict(size=10),autorange="reversed"),xaxis=dict(tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# Tab 5. 추천인 분석
+# ============================================================
 with tab5:
     clm={}
     for _,r in referrals_df.iterrows():
@@ -397,6 +484,9 @@ with tab5:
     if sr: dr=dr[dr.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
     st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
 
+# ============================================================
+# Tab 6. 케어포 멤버십
+# ============================================================
 with tab6:
     cfg=['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
     co=filtered[filtered['회원 등급'].isin(cfg)]; cmb=members[members['회원타입']=='케어포']; cf_filtered=filtered_members[filtered_members['회원타입']=='케어포']
@@ -439,5 +529,299 @@ with tab6:
     fig.update_layout(height=480,barmode='stack',margin=dict(l=60,r=20,t=30,b=100),legend=dict(orientation="h",yanchor="top",y=-0.12,x=0,font=dict(size=10)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
 
+# ============================================================
+# Tab 7. 손익 분석 (BW)
+# ============================================================
+with tab7:
+    if len(bw_data) == 0:
+        st.warning("⚠️ BW 손익 데이터가 없습니다. 엑셀 파일에 'BW' 시트를 추가해주세요.")
+    else:
+        bw = bw_filtered.copy()
+
+        # --- 손익 탭 전용 필터 ---
+        bw_channels = sorted(bw['채널'].unique().tolist())
+        sel_channels = st.multiselect("채널 필터", bw_channels, default=[], placeholder="전체", key="bw_channel")
+        if sel_channels:
+            bw = bw[bw['채널'].isin(sel_channels)]
+
+        prod_large = sorted(bw['제품계층구조(대)'].dropna().unique().tolist())
+        sel_prod_l = st.multiselect("제품계층구조(대) 필터", prod_large, default=[], placeholder="전체", key="bw_prod_l")
+        if sel_prod_l:
+            bw = bw[bw['제품계층구조(대)'].isin(sel_prod_l)]
+
+        # --- KPI 카드 ---
+        rev = bw['I.매출액(FI기준)'].sum()
+        cogs = bw['II.매출원가'].sum()
+        gp = bw['III.매출총이익'].sum()
+        sga = bw['IV.판매비 및 관리비'].sum()
+        oi = bw['V.영업이익I'].sum()
+        oi_rate = (oi / rev * 100) if rev != 0 else 0
+
+        cols = st.columns(6)
+        kpis = [
+            ("매출액", fmt_krw_short(rev), "원"),
+            ("매출원가", fmt_krw_short(cogs), "원"),
+            ("매출총이익", fmt_krw_short(gp), "원"),
+            ("판관비", fmt_krw_short(sga), "원"),
+            ("영업이익", fmt_krw_short(oi), "원"),
+            ("영업이익률", fmt_pct(oi_rate), ""),
+        ]
+        for col, (l, v, u) in zip(cols, kpis):
+            col.markdown(kpi_card(l, v, u), unsafe_allow_html=True)
+
+        # --- 차트 1: 손익 워터폴 ---
+        st.markdown("#### 손익 워터폴")
+        wf_labels = ['매출액', '매출원가', '매출총이익', '판관비', '영업이익']
+        wf_values = [rev, -cogs, gp, -sga, oi]
+        wf_measure = ['absolute', 'relative', 'total', 'relative', 'total']
+        wf_colors = ['#3366CC', '#E74C3C', '#27AE60', '#E74C3C', '#27AE60']
+        fig = go.Figure(go.Waterfall(
+            x=wf_labels, y=wf_values, measure=wf_measure,
+            connector=dict(line=dict(color="#94a3b8", width=1)),
+            increasing=dict(marker=dict(color='#27AE60')),
+            decreasing=dict(marker=dict(color='#E74C3C')),
+            totals=dict(marker=dict(color='#3366CC')),
+            text=[fmt_krw_short(abs(v)) for v in wf_values],
+            textposition='outside', textfont=dict(size=12),
+            hovertemplate='%{x}<br>금액: %{customdata}<extra></extra>',
+            customdata=[fmt_krw(abs(v)) for v in wf_values]
+        ))
+        fig.update_layout(height=480, margin=dict(l=80, r=30, t=50, b=60),
+            xaxis=dict(tickfont=dict(size=13)),
+            yaxis=dict(title='금액', tickfont=dict(size=11)),
+            showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- 차트 2: 월별 손익 추이 ---
+        st.markdown("#### 월별 손익 추이")
+        bw_monthly = bw.groupby('연월').agg(
+            매출액=('I.매출액(FI기준)', 'sum'),
+            매출총이익=('III.매출총이익', 'sum'),
+            영업이익=('V.영업이익I', 'sum')
+        ).reset_index().sort_values('연월')
+        bw_monthly['영업이익률'] = np.where(bw_monthly['매출액'] != 0, bw_monthly['영업이익'] / bw_monthly['매출액'] * 100, 0)
+        bw_monthly['연월_kr'] = ym_series_kr(bw_monthly['연월'])
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        for col_name, color, name in [('매출액', '#3366CC', '매출액'), ('매출총이익', '#27AE60', '매출총이익'), ('영업이익', '#E8853D', '영업이익')]:
+            fig.add_trace(go.Bar(
+                x=bw_monthly['연월_kr'], y=bw_monthly[col_name], name=name,
+                marker_color=color, opacity=0.85,
+                hovertemplate='%{x}<br>' + name + ': %{customdata}<extra></extra>',
+                customdata=[fmt_krw(v) for v in bw_monthly[col_name]]
+            ), secondary_y=False)
+        fig.add_trace(go.Scatter(
+            x=bw_monthly['연월_kr'], y=bw_monthly['영업이익률'], name='영업이익률',
+            line=dict(color='#E74C3C', width=3), mode='lines+markers+text',
+            marker=dict(size=8), text=[f"{v:.1f}%" for v in bw_monthly['영업이익률']],
+            textposition='top center', textfont=dict(size=11, color='#E74C3C'),
+            hovertemplate='%{x}<br>영업이익률: %{y:.1f}%<extra></extra>'
+        ), secondary_y=True)
+        fig.update_layout(height=500, barmode='group',
+            margin=dict(l=80, r=60, t=50, b=70),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+            xaxis=dict(tickfont=dict(size=12)))
+        fig.update_yaxes(title_text="금액", tickfont=dict(size=11), secondary_y=False)
+        fig.update_yaxes(title_text="영업이익률 (%)", tickfont=dict(size=11), ticksuffix='%', secondary_y=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # --- 차트 3: 채널별 손익 비교 ---
+        st.markdown("#### 채널별 손익 비교")
+        ch_pnl = bw.groupby('채널').agg(
+            매출액=('I.매출액(FI기준)', 'sum'),
+            매출원가=('II.매출원가', 'sum'),
+            매출총이익=('III.매출총이익', 'sum'),
+            판관비=('IV.판매비 및 관리비', 'sum'),
+            영업이익=('V.영업이익I', 'sum')
+        ).reset_index()
+        ch_pnl['매출총이익률'] = np.where(ch_pnl['매출액'] != 0, ch_pnl['매출총이익'] / ch_pnl['매출액'] * 100, 0)
+        ch_pnl['영업이익률'] = np.where(ch_pnl['매출액'] != 0, ch_pnl['영업이익'] / ch_pnl['매출액'] * 100, 0)
+        ch_pnl = ch_pnl.sort_values('매출액', ascending=True)
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(
+            x=ch_pnl['매출액'], y=ch_pnl['채널'], name='매출액', orientation='h',
+            marker_color='#3366CC', opacity=0.8,
+            text=[fmt_krw_short(v) for v in ch_pnl['매출액']], textposition='outside', textfont=dict(size=10),
+            hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
+            customdata=[fmt_krw(v) for v in ch_pnl['매출액']]
+        ), secondary_y=False)
+        fig.add_trace(go.Scatter(
+            x=ch_pnl['영업이익률'], y=ch_pnl['채널'], name='영업이익률', mode='markers+text',
+            marker=dict(color='#E74C3C', size=12, symbol='diamond'),
+            text=[f"{v:.1f}%" for v in ch_pnl['영업이익률']], textposition='middle right', textfont=dict(size=10, color='#E74C3C'),
+            hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
+            xaxis='x2'
+        ), secondary_y=False)
+        fig.update_layout(
+            height=max(450, len(ch_pnl) * 38 + 140),
+            margin=dict(l=130, r=80, t=30, b=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+            xaxis=dict(title='매출액', tickfont=dict(size=11), side='bottom'),
+            xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
+            yaxis=dict(title='', tickfont=dict(size=11))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("#### 채널별 손익 상세")
+        ch_display = ch_pnl.sort_values('매출액', ascending=False)[['채널','매출액','매출원가','매출총이익','매출총이익률','판관비','영업이익','영업이익률']]
+        st.dataframe(ch_display.style.format({
+            '매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원',
+            '매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%'
+        }), use_container_width=True, height=450)
+
+        # --- 차트 4: 판관비 구성 분석 ---
+        st.markdown("#### 판관비 구성 분석")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("##### 판관비 항목별 비중")
+            adv = bw['IV.6.광고선전비'].sum()
+            freight = bw['IV.7.운반비'].sum()
+            commission = bw['IV.8.판매수수료'].sum()
+            promo = bw['IV.9.판촉비'].sum()
+            etc_sga = sga - adv - freight - commission - promo
+            sga_df = pd.DataFrame({
+                '항목': ['광고선전비', '운반비', '판매수수료', '판촉비', '기타판관비'],
+                '금액': [adv, freight, commission, promo, etc_sga]
+            })
+            sga_df = sga_df[sga_df['금액'] > 0].sort_values('금액', ascending=False)
+            fig = make_donut(sga_df, '항목', '금액')
+            fig.update_layout(height=480)
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            st.markdown("##### 월별 판관비 구성 추이")
+            sga_monthly = bw.groupby('연월').agg(
+                광고선전비=('IV.6.광고선전비', 'sum'),
+                운반비=('IV.7.운반비', 'sum'),
+                판매수수료=('IV.8.판매수수료', 'sum'),
+                판촉비=('IV.9.판촉비', 'sum')
+            ).reset_index().sort_values('연월')
+            sga_monthly['기타판관비'] = bw.groupby('연월')['IV.판매비 및 관리비'].sum().values - sga_monthly[['광고선전비','운반비','판매수수료','판촉비']].sum(axis=1).values
+            sga_monthly['연월_kr'] = ym_series_kr(sga_monthly['연월'])
+            sga_cols = ['광고선전비','운반비','판매수수료','판촉비','기타판관비']
+            sga_colors = ['#3366CC','#E8853D','#27AE60','#9B59B6','#94a3b8']
+            fig = go.Figure()
+            for col_name, color in zip(sga_cols, sga_colors):
+                fig.add_trace(go.Bar(
+                    x=sga_monthly['연월_kr'], y=sga_monthly[col_name], name=col_name,
+                    marker_color=color,
+                    hovertemplate='%{x}<br>' + col_name + ': %{customdata}<extra></extra>',
+                    customdata=[fmt_krw(v) for v in sga_monthly[col_name]]
+                ))
+            fig.update_layout(height=480, barmode='stack',
+                margin=dict(l=70, r=20, t=30, b=70),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=10)),
+                xaxis=dict(tickfont=dict(size=12)),
+                yaxis=dict(title='판관비', tickfont=dict(size=11)))
+            st.plotly_chart(fig, use_container_width=True)
+
+        # --- 차트 5: 제품계층구조별 수익성 분석 (서브탭) ---
+        st.markdown("#### 제품계층구조별 수익성 분석")
+        prod_sub1, prod_sub2, prod_sub3 = st.tabs(["대분류", "중분류", "소분류"])
+
+        def render_product_pnl(df, group_col, tab_key):
+            """제품계층구조별 손익 차트 + 테이블 렌더링"""
+            pnl = df.groupby(group_col).agg(
+                매출액=('I.매출액(FI기준)', 'sum'),
+                매출총이익=('III.매출총이익', 'sum'),
+                영업이익=('V.영업이익I', 'sum')
+            ).reset_index()
+            pnl['매출총이익률'] = np.where(pnl['매출액'] != 0, pnl['매출총이익'] / pnl['매출액'] * 100, 0)
+            pnl['영업이익률'] = np.where(pnl['매출액'] != 0, pnl['영업이익'] / pnl['매출액'] * 100, 0)
+            pnl = pnl.sort_values('매출액', ascending=True)
+
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig.add_trace(go.Bar(
+                x=pnl['매출액'], y=pnl[group_col], name='매출액', orientation='h',
+                marker_color='#3366CC', opacity=0.8,
+                text=[fmt_krw_short(v) for v in pnl['매출액']], textposition='outside', textfont=dict(size=10),
+                hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
+                customdata=[fmt_krw(v) for v in pnl['매출액']]
+            ), secondary_y=False)
+            fig.add_trace(go.Scatter(
+                x=pnl['영업이익률'], y=pnl[group_col], name='영업이익률', mode='markers+text',
+                marker=dict(color='#E74C3C', size=10, symbol='diamond'),
+                text=[f"{v:.1f}%" for v in pnl['영업이익률']], textposition='middle right', textfont=dict(size=10, color='#E74C3C'),
+                hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
+                xaxis='x2'
+            ), secondary_y=False)
+            fig.update_layout(
+                height=max(420, len(pnl) * 30 + 140),
+                margin=dict(l=180, r=80, t=30, b=40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+                xaxis=dict(title='매출액', tickfont=dict(size=11)),
+                xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
+                yaxis=dict(title='', tickfont=dict(size=10))
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # 테이블
+            tbl = pnl.sort_values('매출액', ascending=False)
+            search_key = f"prod_search_{tab_key}"
+            ps = st.text_input(f"🔍 {group_col} 검색", key=search_key)
+            if ps:
+                tbl = tbl[tbl[group_col].str.contains(ps, case=False, na=False)]
+            st.dataframe(tbl.style.format({
+                '매출액':'{:,.0f}원','매출총이익':'{:,.0f}원','매출총이익률':'{:.1f}%',
+                '영업이익':'{:,.0f}원','영업이익률':'{:.1f}%'
+            }), use_container_width=True, height=400)
+
+        with prod_sub1:
+            render_product_pnl(bw, '제품계층구조(대)', 'large')
+
+        with prod_sub2:
+            # 대분류 필터 연동
+            sel_large = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_mid_filter")
+            bw_mid = bw if sel_large == "전체" else bw[bw['제품계층구조(대)'] == sel_large]
+            render_product_pnl(bw_mid, '제품계층구조(중)', 'medium')
+
+        with prod_sub3:
+            # 대분류 + 중분류 필터 연동
+            c1, c2 = st.columns(2)
+            with c1:
+                sel_large2 = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_small_filter_l")
+            bw_small = bw if sel_large2 == "전체" else bw[bw['제품계층구조(대)'] == sel_large2]
+            with c2:
+                mid_opts = sorted(bw_small['제품계층구조(중)'].unique().tolist())
+                sel_mid = st.selectbox("중분류 선택", ["전체"] + mid_opts, key="bw_small_filter_m")
+            if sel_mid != "전체":
+                bw_small = bw_small[bw_small['제품계층구조(중)'] == sel_mid]
+            render_product_pnl(bw_small, '제품계층구조(소)', 'small')
+
+        # --- 차트 6: 자재별 손익 테이블 ---
+        st.markdown("#### 자재별 손익 현황")
+        mat_pnl = bw.groupby(['자재', '자재명']).agg(
+            매출액=('I.매출액(FI기준)', 'sum'),
+            매출원가=('II.매출원가', 'sum'),
+            매출총이익=('III.매출총이익', 'sum'),
+            판관비=('IV.판매비 및 관리비', 'sum'),
+            영업이익=('V.영업이익I', 'sum'),
+            판매수량=('판매수량', 'sum')
+        ).reset_index()
+        mat_pnl['매출총이익률'] = np.where(mat_pnl['매출액'] != 0, mat_pnl['매출총이익'] / mat_pnl['매출액'] * 100, 0)
+        mat_pnl['영업이익률'] = np.where(mat_pnl['매출액'] != 0, mat_pnl['영업이익'] / mat_pnl['매출액'] * 100, 0)
+        mat_pnl = mat_pnl.sort_values('매출액', ascending=False)
+
+        ms = st.text_input("🔍 자재명/코드 검색", key="bw_mat_search")
+        if ms:
+            mat_pnl = mat_pnl[mat_pnl.apply(lambda r: ms.lower() in str(r['자재명']).lower() or ms in str(r['자재']), axis=1)]
+
+        def highlight_negative(val):
+            if isinstance(val, (int, float)) and val < 0:
+                return 'color: #E74C3C; font-weight: 600'
+            return ''
+
+        st.dataframe(
+            mat_pnl.style.format({
+                '매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원',
+                '매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원',
+                '영업이익률':'{:.1f}%','판매수량':'{:,.0f}'
+            }).applymap(highlight_negative, subset=['영업이익','영업이익률']),
+            use_container_width=True, height=550
+        )
+
+# ============================================================
+# 푸터
+# ============================================================
 st.markdown("---")
-st.markdown(f"<p style='text-align:center;color:#94a3b8;font-size:0.85rem;'>© 대상웰라이프 B2B몰 대시보드 · 데이터 기준: {pd.Timestamp.now().strftime('%Y년 %m월 %d일')}</p>",unsafe_allow_html=True)
+st.markdown(f"<p style='text-align:center;color:#94a3b8;font-size:0.85rem;'>© 대상웰라이프 B2B몰 대시보드 · 데이터 기준: {pd.Timestamp.now().strftime('%Y년 %m월 %d일')}</p>", unsafe_allow_html=True)
