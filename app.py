@@ -712,11 +712,11 @@ with tab7:
                     hovertemplate='%{x}<br>' + col_name + ': %{customdata}<extra></extra>',
                     customdata=[fmt_krw(v) for v in sga_monthly[col_name]]
                 ))
+            sga_tvals, sga_ttexts = krw_tickvals(sga_monthly[['광고선전비','운반비','판매수수료','판촉비','기타판관비']].sum(axis=1))
             fig.update_layout(height=480, barmode='stack',
                 margin=dict(l=70, r=20, t=30, b=70),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=10)),
                 xaxis=dict(tickfont=dict(size=12)),
-                sga_tvals, sga_ttexts = krw_tickvals(sga_monthly[['광고선전비','운반비','판매수수료','판촉비','기타판관비']].sum(axis=1))
                 yaxis=dict(title='판관비', tickvals=sga_tvals, ticktext=sga_ttexts, tickfont=dict(size=11)))
             st.plotly_chart(fig, use_container_width=True)
 
