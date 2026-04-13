@@ -348,7 +348,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
             if score > best_score:
                 best_score = score
                 best_m = m
-        if best_score >= similarity_threshold and best_m is not None:
+        if best_score >= 85 and best_m is not None:
             grade = '확정'
             results.append({
                 '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
