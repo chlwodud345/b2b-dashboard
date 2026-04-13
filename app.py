@@ -162,6 +162,177 @@ def process_bw(bw_raw):
     bw['영업이익률'] = np.where(bw['I.매출액(FI기준)'] != 0, bw['V.영업이익I'] / bw['I.매출액(FI기준)'] * 100, 0)
     return bw
 
+@st.cache_data(ttl=86400, show_spinner="🏥 만성질환관리 참여의원 데이터를 불러오는 중...")
+def load_chronic_care_clinics():
+    """data.go.kr 일차의료 만성질환관리 시범사업 참여의원 목록 API 호출"""
+    try:
+        api_key = st.secrets["DATA_GO_KR_API_KEY"]
+    except Exception:
+        return pd.DataFrame()
+    
+    base_url = "https://api.odcloud.kr/api/15127570/v1/uddi:55b38b5a-16ed-4daa-b89a-d2a55a4d30c8"
+    all_data = []
+    page = 1
+    per_page = 500
+    
+    while True:
+        try:
+            params = {
+                'serviceKey': api_key,
+                'page': page,
+                'perPage': per_page
+            }
+            resp = requests.get(base_url, params=params, timeout=30)
+            if resp.status_code != 200:
+                break
+            result = resp.json()
+            data = result.get('data', [])
+            if not data:
+                break
+            all_data.extend(data)
+            total = result.get('totalCount', 0)
+            if len(all_data) >= total:
+                break
+            page += 1
+        except Exception:
+            break
+    
+    if not all_data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(all_data)
+    # 컬럼 정리
+    col_map = {'요양기관명': '기관명', '우편번호': '우편번호', '주소': '주소', '전화번호': '전화번호'}
+    df = df.rename(columns=col_map)
+    for c in ['기관명', '우편번호', '주소', '전화번호']:
+        if c not in df.columns:
+            df[c] = ''
+    df = df[['기관명', '우편번호', '주소', '전화번호']]
+    
+    # 매칭용 정규화 컬럼
+    import re
+    df['전화번호_norm'] = df['전화번호'].astype(str).apply(lambda x: re.sub(r'[^0-9]', '', x))
+    df['기관명_norm'] = df['기관명'].astype(str).apply(lambda x: re.sub(r'[\s\(\)·\-]', '', x))
+    
+    def extract_region(addr):
+        if pd.isna(addr) or not addr: return ('', '')
+        addr = str(addr).strip()
+        parts = addr.split()
+        sido = parts[0] if len(parts) > 0 else ''
+        sigungu = parts[1] if len(parts) > 1 else ''
+        return (sido, sigungu)
+    
+    df[['시도', '시군구']] = pd.DataFrame(df['주소'].apply(extract_region).tolist(), index=df.index)
+    
+    return df
+
+
+def match_chronic_care(chronic_df, members_df, orders_df):
+    """만성질환관리 참여의원 ↔ B2B몰 회원 매칭"""
+    import re
+    
+    if chronic_df.empty or members_df.empty:
+        return pd.DataFrame()
+    
+    mem = members_df.copy()
+    mem['전화번호_norm'] = mem['휴대폰'].astype(str).apply(lambda x: re.sub(r'[^0-9]', '', x))
+    mem['상호명_norm'] = mem['상호명'].astype(str).apply(lambda x: re.sub(r'[\s\(\)·\-]', '', x))
+    
+    def extract_region(addr):
+        if pd.isna(addr) or not addr: return ('', '')
+        addr = str(addr).strip()
+        parts = addr.split()
+        sido = parts[0] if len(parts) > 0 else ''
+        sigungu = parts[1] if len(parts) > 1 else ''
+        return (sido, sigungu)
+    
+    mem[['시도', '시군구']] = pd.DataFrame(mem['주소'].apply(extract_region).tolist(), index=mem.index)
+    
+    # 주문 집계
+    order_agg = orders_df.groupby('주문자 ID').agg(
+        총매출=('판매합계금액', 'sum'),
+        주문건수=('주문 ID', 'nunique'),
+        최근주문일=('주문일자', 'max')
+    ).reset_index()
+    
+    results = []
+    matched_chronic_idx = set()
+    
+    # --- Step 1: 전화번호 정확 매칭 ---
+    phone_map = mem[mem['전화번호_norm'].str.len() >= 9].set_index('전화번호_norm')
+    for idx, row in chronic_df.iterrows():
+        if idx in matched_chronic_idx:
+            continue
+        phone = row['전화번호_norm']
+        if phone and len(phone) >= 9 and phone in phone_map.index:
+            m = phone_map.loc[phone]
+            if isinstance(m, pd.DataFrame):
+                m = m.iloc[0]
+            results.append({
+                '기관명': row['기관명'], '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
+                '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
+                '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
+                '매칭방법': '전화번호', '매칭등급': '확정'
+            })
+            matched_chronic_idx.add(idx)
+    
+    # --- Step 2: 상호명 + 지역 정확 매칭 ---
+    for idx, row in chronic_df.iterrows():
+        if idx in matched_chronic_idx:
+            continue
+        cname = row['기관명_norm']
+        csido = row['시도']
+        csigungu = row['시군구']
+        if not cname or not csido:
+            continue
+        candidates = mem[(mem['시도'] == csido) & (mem['시군구'] == csigungu) & (mem['상호명_norm'] == cname)]
+        if len(candidates) > 0:
+            m = candidates.iloc[0]
+            results.append({
+                '기관명': row['기관명'], '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
+                '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
+                '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
+                '매칭방법': '상호명+지역', '매칭등급': '확정'
+            })
+            matched_chronic_idx.add(idx)
+    
+    # --- Step 3: 상호명 유사 + 지역 매칭 ---
+    for idx, row in chronic_df.iterrows():
+        if idx in matched_chronic_idx:
+            continue
+        cname = row['기관명_norm']
+        csido = row['시도']
+        csigungu = row['시군구']
+        if not cname or not csido:
+            continue
+        region_mem = mem[(mem['시도'] == csido) & (mem['시군구'] == csigungu)]
+        for _, m in region_mem.iterrows():
+            mname = m['상호명_norm']
+            if not mname:
+                continue
+            if cname in mname or mname in cname:
+                results.append({
+                    '기관명': row['기관명'], '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
+                    '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
+                    '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
+                    '매칭방법': '상호명유사+지역', '매칭등급': '후보'
+                })
+                matched_chronic_idx.add(idx)
+                break
+    
+    if not results:
+        return pd.DataFrame()
+    
+    result_df = pd.DataFrame(results)
+    
+    # 주문 데이터 조인
+    result_df = result_df.merge(order_agg, left_on='아이디', right_on='주문자 ID', how='left').drop(columns=['주문자 ID'], errors='ignore')
+    result_df['총매출'] = result_df['총매출'].fillna(0)
+    result_df['주문건수'] = result_df['주문건수'].fillna(0).astype(int)
+    result_df['최근주문일'] = result_df['최근주문일'].fillna('-')
+    
+    return result_df
+
 # ============================================================
 # 데이터 로드 (구글 드라이브)
 # ============================================================
@@ -250,7 +421,7 @@ if os.path.exists(logo_path):
 else:
     st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📋 종합 현황","💵 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","🤝 케어포 멤버십","📈 손익 분석"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(["📋 종합 현황","💰 매출 분석","📦 상품 분석","👥 회원 분석","🔗 추천인 분석","🩺 케어포 멤버십","📈 손익 분석","🏥 만성질환관리"])
 
 # ============================================================
 # Tab 1. 종합 현황
@@ -825,6 +996,144 @@ with tab7:
             }).map(highlight_negative, subset=['영업이익','영업이익률']),
             use_container_width=True, height=550
         )
+
+# ============================================================
+# Tab 8. 만성질환관리 참여기관 분석
+# ============================================================
+with tab8:
+    chronic_df = load_chronic_care_clinics()
+    
+    if chronic_df.empty:
+        st.warning("⚠️ 만성질환관리 참여의원 데이터를 불러올 수 없습니다.\n\nStreamlit Secrets에 `DATA_GO_KR_API_KEY`를 설정해주세요.")
+    else:
+        match_df = match_chronic_care(chronic_df, members, orders)
+        
+        total_clinics = len(chronic_df)
+        matched_count = len(match_df)
+        confirmed = len(match_df[match_df['매칭등급'] == '확정']) if not match_df.empty else 0
+        candidate = len(match_df[match_df['매칭등급'] == '후보']) if not match_df.empty else 0
+        matched_revenue = match_df['총매출'].sum() if not match_df.empty else 0
+        match_rate = (matched_count / total_clinics * 100) if total_clinics > 0 else 0
+        
+        cols = st.columns(6)
+        kpis = [
+            ("참여의원 수", fmt_num(total_clinics), "곳"),
+            ("B2B몰 가입", fmt_num(matched_count), "곳"),
+            ("가입률", fmt_pct(match_rate), ""),
+            ("확정 매칭", fmt_num(confirmed), "곳"),
+            ("후보 매칭", fmt_num(candidate), "곳"),
+            ("가입기관 매출", fmt_krw_short(matched_revenue), "원"),
+        ]
+        for col, (l, v, u) in zip(cols, kpis):
+            col.markdown(kpi_card(l, v, u), unsafe_allow_html=True)
+        
+        # --- 매칭 현황 도넛 + 지역별 분포 ---
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### 매칭 현황")
+            status_df = pd.DataFrame({
+                '구분': ['확정 매칭', '후보 매칭', '미매칭'],
+                '수': [confirmed, candidate, total_clinics - matched_count]
+            })
+            status_df = status_df[status_df['수'] > 0]
+            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#F39C12', '#BDC3C7'])
+            fig.update_layout(height=480)
+            # 도넛 중앙 텍스트 수정
+            fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(total_clinics)}곳"
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with c2:
+            st.markdown("#### 지역별 참여의원 분포 (B2B 가입 여부)")
+            region_all = chronic_df['시도'].value_counts().reset_index()
+            region_all.columns = ['지역', '참여의원수']
+            if not match_df.empty:
+                region_matched = match_df.groupby(match_df['주소_공공'].str.split().str[0]).size().reset_index()
+                region_matched.columns = ['지역', '가입기관수']
+                region_all = region_all.merge(region_matched, on='지역', how='left')
+            else:
+                region_all['가입기관수'] = 0
+            region_all['가입기관수'] = region_all['가입기관수'].fillna(0).astype(int)
+            region_all['미가입'] = region_all['참여의원수'] - region_all['가입기관수']
+            region_all = region_all.sort_values('참여의원수')
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(y=region_all['지역'], x=region_all['가입기관수'], name='B2B 가입', orientation='h', marker_color='#27AE60',
+                hovertemplate='%{y}<br>가입: %{x}곳<extra></extra>'))
+            fig.add_trace(go.Bar(y=region_all['지역'], x=region_all['미가입'], name='미가입', orientation='h', marker_color='#BDC3C7',
+                hovertemplate='%{y}<br>미가입: %{x}곳<extra></extra>'))
+            fig.update_layout(height=480, barmode='stack', margin=dict(l=80, r=30, t=30, b=40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+                xaxis=dict(title='기관 수', tickfont=dict(size=11)), yaxis=dict(title='', tickfont=dict(size=11)))
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # --- 매칭 기관 매출 분석 ---
+        if not match_df.empty and matched_revenue > 0:
+            st.markdown("#### 매칭 기관 매출 TOP 20")
+            top20 = match_df[match_df['총매출'] > 0].sort_values('총매출', ascending=False).head(20)
+            if len(top20) > 0:
+                fig = px.bar(top20, x='총매출', y='상호명_B2B', orientation='h', color='매칭등급',
+                    color_discrete_map={'확정': '#27AE60', '후보': '#F39C12'})
+                fig.update_traces(
+                    text=[fmt_krw_short(v) for v in top20['총매출']], textposition='outside', textfont=dict(size=10),
+                    hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
+                    customdata=[fmt_krw(v) for v in top20['총매출']])
+                top_tvals, top_ttexts = krw_tickvals(top20['총매출'])
+                fig.update_layout(height=max(450, len(top20) * 28 + 140), margin=dict(l=180, r=80, t=30, b=40),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+                    xaxis=dict(title='매출액', tickvals=top_tvals, ticktext=top_ttexts, tickfont=dict(size=11)),
+                    yaxis=dict(title='', tickfont=dict(size=10)))
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # 회원등급별 매칭 기관 매출
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("#### 매칭 기관 회원타입별 매출")
+                type_rev = match_df.groupby('회원타입')['총매출'].sum().reset_index().sort_values('총매출', ascending=False)
+                type_rev.columns = ['회원타입', '매출']
+                type_rev = type_rev[type_rev['매출'] > 0]
+                if len(type_rev) > 0:
+                    fig = make_donut(type_rev, '회원타입', '매출')
+                    fig.update_layout(height=450)
+                    st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                st.markdown("#### 매칭 기관 회원등급별 매출")
+                grade_rev = match_df.groupby('회원등급')['총매출'].sum().reset_index().sort_values('총매출', ascending=False)
+                grade_rev.columns = ['회원등급', '매출']
+                grade_rev = grade_rev[grade_rev['매출'] > 0]
+                if len(grade_rev) > 0:
+                    fig = make_donut(grade_rev, '회원등급', '매출')
+                    fig.update_layout(height=450)
+                    st.plotly_chart(fig, use_container_width=True)
+        
+        # --- 상세 테이블 ---
+        st.markdown("#### 매칭 기관 상세")
+        match_filter = st.selectbox("매칭등급 필터", ["전체", "확정", "후보"], key="chronic_match_filter")
+        display_df = match_df.copy() if not match_df.empty else pd.DataFrame()
+        if not display_df.empty:
+            if match_filter != "전체":
+                display_df = display_df[display_df['매칭등급'] == match_filter]
+            display_df = display_df.sort_values('총매출', ascending=False).reset_index(drop=True)
+            search_chronic = st.text_input("🔍 기관명/상호명 검색", key="chronic_search")
+            if search_chronic:
+                display_df = display_df[display_df.apply(lambda r: search_chronic.lower() in str(r['기관명']).lower() or search_chronic.lower() in str(r['상호명_B2B']).lower(), axis=1)]
+            st.dataframe(display_df.style.format({
+                '총매출': '{:,.0f}원', '주문건수': '{:,.0f}건'
+            }), use_container_width=True, height=550)
+        else:
+            st.info("매칭된 기관이 없습니다.")
+        
+        # --- 미매칭 참여의원 목록 ---
+        with st.expander("📋 미매칭 참여의원 목록 보기"):
+            if not match_df.empty:
+                matched_names = set(match_df['기관명'].tolist())
+                unmatched = chronic_df[~chronic_df['기관명'].isin(matched_names)][['기관명', '주소', '전화번호']].reset_index(drop=True)
+            else:
+                unmatched = chronic_df[['기관명', '주소', '전화번호']].reset_index(drop=True)
+            st.markdown(f"**미매칭: {len(unmatched)}곳** — 잠재 영업 대상 기관입니다.")
+            search_unmatched = st.text_input("🔍 미매칭 기관 검색", key="unmatched_search")
+            if search_unmatched:
+                unmatched = unmatched[unmatched.apply(lambda r: search_unmatched.lower() in str(r).lower(), axis=1)]
+            st.dataframe(unmatched, use_container_width=True, height=450)
 
 # ============================================================
 # 푸터
