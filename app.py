@@ -345,6 +345,21 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
     results = []
     matched_idx = set()
 
+    # --- Step 0: 수동 매칭 ---
+    mem_by_id = mem.set_index('아이디')
+    for idx, row in pilot_df.iterrows():
+        bid = MANUAL_MATCH.get(row['기관명'])
+        if bid and bid in mem_by_id.index:
+            m = mem_by_id.loc[bid]
+            results.append({
+                '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
+                '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
+                '상호명_B2B': m['상호명'], '아이디': bid, '주소_B2B': m['주소'],
+                '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
+                '매칭방법': '수동매칭', '매칭등급': '확정', '유사도': 100
+            })
+            matched_idx.add(idx)
+
     # --- Step 1: 전화번호 정확 매칭 ---
     phone_map = {}
     for _, m in mem[mem['전화번호_norm'].str.len() >= 9].iterrows():
