@@ -206,10 +206,25 @@ def extract_sigungu(addr):
     return parts[1] if len(parts) > 1 else ''
 
 def extract_road(addr):
-    """주소에서 도로명 추출 (3번째 단어)"""
+    """주소에서 도로명+건물번호 추출 (구 포함 주소 대응)"""
     if pd.isna(addr) or not addr: return ''
     parts = str(addr).strip().split()
-    return parts[2] if len(parts) > 2 else ''
+    road_idx = 2
+    for i in range(2, min(len(parts), 5)):
+        word = parts[i].rstrip(',')
+        if word.endswith(('구','군')):
+            road_idx = i + 1
+            continue
+        if word.endswith(('로','길')):
+            road_idx = i
+            break
+    if road_idx < len(parts):
+        road = parts[road_idx].rstrip(',')
+        if road_idx + 1 < len(parts):
+            bldg = parts[road_idx + 1].rstrip(',')
+            return road + ' ' + bldg
+        return road
+    return ''
 
 def normalize_name(name):
     """상호명 정규화: 공백, 특수문자, 접미어 제거"""
