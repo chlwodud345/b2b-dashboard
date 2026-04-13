@@ -668,7 +668,7 @@ with tab7:
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("#### 채널별 손익 상세")
-        ch_display = ch_pnl.sort_values('매출액', ascending=False)[['채널','매출액','매출원가','매출총이익','매출총이익률','판관비','영업이익','영업이익률']]
+        ch_display = ch_pnl.sort_values('매출액', ascending=False)[['채널','매출액','매출원가','매출총이익','매출총이익률','판관비','영업이익','영업이익률']].reset_index(drop=True)
         st.dataframe(ch_display.style.format({
             '매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원',
             '매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%'
@@ -762,7 +762,7 @@ with tab7:
             st.plotly_chart(fig, use_container_width=True)
 
             # 테이블
-            tbl = pnl.sort_values('매출액', ascending=False)
+            tbl = pnl.sort_values('매출액', ascending=False).reset_index(drop=True)
             search_key = f"prod_search_{tab_key}"
             ps = st.text_input(f"🔍 {group_col} 검색", key=search_key)
             if ps:
@@ -806,7 +806,7 @@ with tab7:
         ).reset_index()
         mat_pnl['매출총이익률'] = np.where(mat_pnl['매출액'] != 0, mat_pnl['매출총이익'] / mat_pnl['매출액'] * 100, 0)
         mat_pnl['영업이익률'] = np.where(mat_pnl['매출액'] != 0, mat_pnl['영업이익'] / mat_pnl['매출액'] * 100, 0)
-        mat_pnl = mat_pnl.sort_values('매출액', ascending=False)
+        mat_pnl = mat_pnl.sort_values('매출액', ascending=False).reset_index(drop=True)
 
         ms = st.text_input("🔍 자재명/코드 검색", key="bw_mat_search")
         if ms:
