@@ -346,7 +346,7 @@ with tab3:
     st.markdown("#### 회원구분별 × 상품 매출 크로스 (TOP 20)")
     t20n = pa.head(20)['상품명'].tolist()
     cp = filtered[filtered['상품명'].isin(t20n)].pivot_table(index='상품명',columns='주문자 구분',values='판매합계금액',aggfunc='sum',fill_value=0)
-    cp['합계'] = cp.sum(axis=1); cp = cp.sort_values('합계',ascending=False).reset_index()
+    cp['합계'] = cp.sum(axis=1); cp = cp.sort_values('합계',ascending=False)
     st.dataframe(cp.style.format('{:,.0f}원'),use_container_width=True,height=550)
     st.markdown("#### 월별 상품 매출 추이")
     t5 = pa.head(5)['상품명'].tolist(); sel = st.multiselect("상품 선택",pa['상품명'].tolist(),default=t5,key="product_trend")
