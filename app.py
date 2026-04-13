@@ -338,6 +338,15 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
         if idx in matched_idx: continue
         cname = row['기관명_norm']
         rkey = (row['시도'], row['시군구'])
+        # 디버깅: 행복한내과의원 추적
+        if '행복한내과' in str(row['기관명']):
+            import streamlit as st
+            st.warning(f"🔍 디버그: 기관명={row['기관명']}, norm={cname}, rkey={rkey}, rkey존재={rkey in mem_by_region}, matched_idx포함={idx in matched_idx}")
+            if rkey in mem_by_region:
+                for m in mem_by_region[rkey]:
+                    score = name_similarity(cname, m['상호명_norm'])
+                    if score > 0:
+                        st.warning(f"  → 비교: {m['상호명']}(norm={m['상호명_norm']}) score={score}")
         if not cname or rkey not in mem_by_region: continue
         best_score = 0
         best_m = None
