@@ -240,66 +240,38 @@ def normalize_name(name):
     return s
 
 def name_similarity(a, b):
-    """두 상호명의 유사도 점수 (0~100) — 괄호 안/밖 변형 모두 비교"""
+    """두 상호명의 유사도 점수 (0~100)"""
     if not a or not b: return 0
     import re
-
-    def extract_variants(s):
-        """괄호 밖, 괄호 안, 원본 3가지 버전 생성"""
-        variants = [s]
-        # 괄호 안 내용 추출
-        inner = re.findall(r'\(([^)]+)\)', s.replace('（','(').replace('）',')'))
-        # 괄호+내용 제거 (밖만 남김)
-        outer = re.sub(r'\([^)]*\)', '', s.replace('（','(').replace('）',')')).strip()
-        outer = re.sub(r'[\s]', '', outer)
-        if outer and outer != s: variants.append(outer)
-        for inn in inner:
-            inn_clean = re.sub(r'[\s]', '', inn)
-            if inn_clean and inn_clean != s: variants.append(inn_clean)
-        return variants
-
-    def base_score(x, y):
-        """두 문자열 간 기본 유사도 계산"""
-        if not x or not y: return 0
-        if x == y: return 100
-        # 접미어 제거 비교
-        suffixes = r'(한의원|의원|병원|클리닉|약국|요양원|의료원|보건소|한방병원|치과)$'
-        x_stripped = re.sub(suffixes, '', x)
-        y_stripped = re.sub(suffixes, '', y)
-        if x_stripped and y_stripped and x_stripped == y_stripped: return 98
-        # 진료과목 불일치 체크
-        dept_pattern = r'(내과|치과|외과|피부과|안과|이비인후과|정형외과|산부인과|비뇨기과|신경과|정신과|재활의학과|소아과|한의원|가정의학과)'
-        x_dept = re.findall(dept_pattern, x)
-        y_dept = re.findall(dept_pattern, y)
-        if x_dept and y_dept and x_dept != y_dept: return 0
-        # 포함 관계
-        if x in y or y in x:
-            return int(min(len(x), len(y)) / max(len(x), len(y)) * 100)
-        # 공통 글자 비율
-        set_x, set_y = set(x), set(y)
-        common = len(set_x & set_y)
-        total = max(len(set_x), len(set_y))
-        if total == 0: return 0
-        base = int(common / total * 100)
-        # 앞글자 보너스/페널티
-        prefix_len = 0
-        for cx, cy in zip(x, y):
-            if cx == cy: prefix_len += 1
-            else: break
-        if prefix_len < 2:
-            return min(base, 50)
+    # 완전 일치
+    if a == b: return 100
+    # 의료기관 접미어 제거 후 비교
+    suffixes = r'(한의원|의원|병원|클리닉|약국|요양원|의료원|보건소|한방병원|치과)$'
+    a_stripped = re.sub(suffixes, '', a)
+    b_stripped = re.sub(suffixes, '', b)
+    if a_stripped and b_stripped and a_stripped == b_stripped: return 98
+    # 진료과목(내과/치과/외과/피부과/안과/이비인후과 등)이 다르면 다른 기관
+    dept_pattern = r'(내과|치과|외과|피부과|안과|이비인후과|정형외과|산부인과|비뇨기과|신경과|정신과|재활의학과|소아과|한의원)'
+    a_dept = re.findall(dept_pattern, a)
+    b_dept = re.findall(dept_pattern, b)
+    if a_dept and b_dept and a_dept != b_dept: return 0
+    # 포함 관계
+    if a in b or b in a:
+        return int(min(len(a), len(b)) / max(len(a), len(b)) * 100)
+    # 공통 글자 비율 (순서 무시)
+    set_a, set_b = set(a), set(b)
+    common = len(set_a & set_b)
+    total = max(len(set_a), len(set_b))
+    if total == 0: return 0
+    base = int(common / total * 100)
+    # 앞글자 일치 보너스
+    prefix_len = 0
+    for ca, cb in zip(a, b):
+        if ca == cb: prefix_len += 1
+        else: break
+    if prefix_len >= 2:
         base = min(100, base + prefix_len * 5)
-        return base
-
-    # a, b 각각의 변형을 모두 조합해서 최고 점수 취함
-    a_vars = extract_variants(a)
-    b_vars = extract_variants(b)
-    best = 0
-    for av in a_vars:
-        for bv in b_vars:
-            s = base_score(av, bv)
-            if s > best: best = s
-    return best
+    return base
 
 
 @st.cache_data(ttl=3600, show_spinner="🏥 일차의료 시범기관 데이터를 불러오는 중...")
@@ -392,30 +364,6 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
                 '매칭방법': '상호명+지역', '매칭등급': '확정', '유사도': 100
             })
             matched_idx.add(idx)
-
-    # --- Step 2.5: 동일 건물(도로명+번호) 매칭 — 해당 건물에 병원 회원이 1곳뿐이면 매칭 ---
-    mem_by_addr = {}
-    for _, m in mem.iterrows():
-        akey = (m['시도'], m['시군구'], m['도로명'])
-        mem_by_addr.setdefault(akey, []).append(m)
-    for idx, row in pilot_df.iterrows():
-        if idx in matched_idx: continue
-        akey = (row['시도'], row['시군구'], extract_road(row['주소']))
-        if not akey[2] or akey not in mem_by_addr: continue
-        candidates = mem_by_addr[akey]
-        if len(candidates) == 1:
-            m = candidates[0]
-            results.append({
-                '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
-                '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
-                '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
-                '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
-                '매칭방법': '주소일치(동일건물)', '매칭등급': '확정', '유사도': 100
-            })
-            matched_idx.add(idx)
-
-    # --- Step 3: 시도+시군구 + 상호명 유사도 매칭 ---
-    mem_by_region = {}
 
     # --- Step 3: 시도+시군구 + 상호명 유사도 매칭 ---
     mem_by_region = {}
