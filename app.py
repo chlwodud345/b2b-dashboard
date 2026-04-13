@@ -281,6 +281,7 @@ def load_pilot_clinics():
     result['기관명_norm'] = result['기관명'].apply(normalize_name)
     result['시도'] = result['주소'].apply(normalize_sido)
     result['시군구'] = result['주소'].apply(extract_sigungu)
+    result['도로명'] = result['주소'].apply(extract_road)
     return result
 
 
@@ -295,6 +296,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
     mem['상호명_norm'] = mem['상호명'].apply(normalize_name)
     mem['시도'] = mem['주소'].apply(normalize_sido)
     mem['시군구'] = mem['주소'].apply(extract_sigungu)
+    mem['도로명'] = mem['주소'].apply(extract_road)
 
     # 주문 집계
     order_agg = orders_df.groupby('주문자 ID').agg(
@@ -346,12 +348,12 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
     # --- Step 3: 시도+시군구 + 상호명 유사도 매칭 ---
     mem_by_region = {}
     for _, m in mem.iterrows():
-        rkey = (m['시도'], m['시군구'])
+        rkey = (m['시도'], m['시군구'], m['도로명'])
         mem_by_region.setdefault(rkey, []).append(m)
     for idx, row in pilot_df.iterrows():
         if idx in matched_idx: continue
         cname = row['기관명_norm']
-        rkey = (row['시도'], row['시군구'])
+        rkey = (row['시도'], row['시군구'], extract_road(row['주소']))
         if not cname or rkey not in mem_by_region: continue
         best_score = 0
         best_m = None
