@@ -206,18 +206,14 @@ def extract_sigungu(addr):
     return parts[1] if len(parts) > 1 else ''
 
 def normalize_name(name):
-    """상호명 정규화: 공백, 특수문자, 법인접두어, 기관접미어 제거"""
+    """상호명 정규화: 공백, 특수문자, 접미어 제거"""
     if pd.isna(name) or not name: return ''
     import re
     s = str(name).strip()
-    # 1) 법인명 접두어 제거 (괄호 포함 원본에서 먼저 처리)
-    for prefix in ['의료법인','사회복지법인','재단법인','학교법인','(의)','(사)','(재)']:
-        s = s.replace(prefix, '')
-    # 2) 의료기관 접미어 제거 (공백 제거 전에 처리)
-    s = re.sub(r'(한의원|의원|병원|클리닉|약국|요양원|의료원|보건소|한방병원|치과)$', '', s.strip())
-    s = re.sub(r'(한의원|의원|병원|클리닉|약국|요양원|의료원|보건소|한방병원|치과)\s*$', '', s.strip())
-    # 3) 공백, 특수문자 제거
     s = re.sub(r'[\s\(\)·\-\.\,\']', '', s)
+    # 법인명 접두어 제거
+    for prefix in ['의료법인','사회복지법인','재단법인','학교법인','(의)','(사)','(재)']:
+        s = s.replace(prefix.replace('(','').replace(')',''), '')
     return s
 
 def name_similarity(a, b):
@@ -352,7 +348,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
             if score > best_score:
                 best_score = score
                 best_m = m
-        if best_score >= 85 and best_m is not None:
+        if best_score >= similarity_threshold and best_m is not None:
             grade = '확정'
             results.append({
                 '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
