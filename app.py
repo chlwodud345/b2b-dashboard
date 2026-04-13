@@ -1041,7 +1041,7 @@ with tab8:
             fig.update_layout(height=480)
             # 도넛 중앙 텍스트 수정
             fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(total_clinics)}곳"
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="chronic_match_donut")
         
         with c2:
             st.markdown("#### 지역별 참여의원 분포 (B2B 가입 여부)")
@@ -1065,7 +1065,7 @@ with tab8:
             fig.update_layout(height=480, barmode='stack', margin=dict(l=80, r=30, t=30, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
                 xaxis=dict(title='기관 수', tickfont=dict(size=11)), yaxis=dict(title='', tickfont=dict(size=11)))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="chronic_region_bar")
         
         # --- 매칭 기관 매출 분석 ---
         if not match_df.empty and matched_revenue > 0:
@@ -1083,7 +1083,7 @@ with tab8:
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
                     xaxis=dict(title='매출액', tickvals=top_tvals, ticktext=top_ttexts, tickfont=dict(size=11)),
                     yaxis=dict(title='', tickfont=dict(size=10)))
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True, key="chronic_top20")
             
             # 회원등급별 매칭 기관 매출
             c1, c2 = st.columns(2)
@@ -1095,7 +1095,7 @@ with tab8:
                 if len(type_rev) > 0:
                     fig = make_donut(type_rev, '회원타입', '매출')
                     fig.update_layout(height=450)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key="chronic_type_donut")
             with c2:
                 st.markdown("#### 매칭 기관 회원등급별 매출")
                 grade_rev = match_df.groupby('회원등급')['총매출'].sum().reset_index().sort_values('총매출', ascending=False)
@@ -1104,7 +1104,7 @@ with tab8:
                 if len(grade_rev) > 0:
                     fig = make_donut(grade_rev, '회원등급', '매출')
                     fig.update_layout(height=450)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True, key="chronic_grade_donut")
         
         # --- 상세 테이블 ---
         st.markdown("#### 매칭 기관 상세")
