@@ -178,7 +178,8 @@ def load_pilot_clinics():
     all_frames = []
     for label, sheet_name in PILOT_SHEETS.items():
         try:
-            url = f"https://docs.google.com/spreadsheets/d/{PILOT_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+            from urllib.parse import quote
+            url = f"https://docs.google.com/spreadsheets/d/{PILOT_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
             df = pd.read_csv(url)
             df.columns = [c.strip() for c in df.columns]
             # 컬럼 통일
