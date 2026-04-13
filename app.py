@@ -319,7 +319,7 @@ with tab2:
     st.markdown("#### 기관별 매출 현황")
     ba = filtered.groupby(['주문자 ID','주문자명','주문자 구분','회원 등급']).agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),최근주문일=('주문일자','max')).reset_index()
     ba['객단가'] = (ba['매출']/ba['주문건수']).round(0); ba['상호명'] = ba['주문자 ID'].map(lambda x: member_lookup.get(x, {}).get('상호명', ''))
-    ba = ba[['주문자 ID','주문자명','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False)
+    ba = ba[['주문자 ID','주문자명','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
     search = st.text_input("🔍 검색 (아이디, 주문자명, 상호명)",key="sales_search")
     if search: ba = ba[ba.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
     st.dataframe(ba.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
@@ -340,13 +340,13 @@ with tab3:
     fig.update_yaxes(title_text="누적 비중 (%)",range=[0,100],ticksuffix='%',tickfont=dict(size=11),secondary_y=True)
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 전체 상품 매출 현황")
-    sp = st.text_input("🔍 상품명/코드 검색",key="product_search"); dp = pa.copy()
+    sp = st.text_input("🔍 상품명/코드 검색",key="product_search"); dp = pa.copy().reset_index(drop=True)
     if sp: dp = dp[dp.apply(lambda r:sp.lower() in str(r).lower(),axis=1)]
     st.dataframe(dp.style.format({'매출':'{:,.0f}원','수량':'{:,.0f}','주문건수':'{:,.0f}건'}),use_container_width=True,height=450)
     st.markdown("#### 회원구분별 × 상품 매출 크로스 (TOP 20)")
     t20n = pa.head(20)['상품명'].tolist()
     cp = filtered[filtered['상품명'].isin(t20n)].pivot_table(index='상품명',columns='주문자 구분',values='판매합계금액',aggfunc='sum',fill_value=0)
-    cp['합계'] = cp.sum(axis=1); cp = cp.sort_values('합계',ascending=False)
+    cp['합계'] = cp.sum(axis=1); cp = cp.sort_values('합계',ascending=False).reset_index()
     st.dataframe(cp.style.format('{:,.0f}원'),use_container_width=True,height=550)
     st.markdown("#### 월별 상품 매출 추이")
     t5 = pa.head(5)['상품명'].tolist(); sel = st.multiselect("상품 선택",pa['상품명'].tolist(),default=t5,key="product_trend")
@@ -392,7 +392,7 @@ with tab4:
             result['주문건수'] = result['주문건수'].fillna(0).astype(int)
             for c in ['주요 구매상품','추천인명','추천인유형']: result[c] = result[c].fillna('-')
             display_cols = ['아이디','상호명','담당자 이름','회원타입','회원등급','가입일','총매출','주문건수','객단가','첫주문일','최근주문일','주요 구매상품','추천인명','추천인유형','휴대폰','주소']
-            result = result[[c for c in display_cols if c in result.columns]].sort_values('총매출',ascending=False)
+            result = result[[c for c in display_cols if c in result.columns]].sort_values('총매출',ascending=False).reset_index(drop=True)
             st.markdown(f"**검색 결과: {len(result)}건**")
             st.dataframe(result.style.format({'총매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True, height=400)
     st.markdown("#### 월별 신규가입자 추이 (회원타입별)")
@@ -480,7 +480,7 @@ with tab5:
     st.markdown("#### 추천인별 현황")
     rtf=st.selectbox("추천인 유형 필터",["전체","영업팀","대리점","케어포"],key="ref_type"); dr=rdf.copy()
     if rtf!="전체": dr=dr[dr['유형']==rtf]
-    dr=dr.sort_values('피추천인매출',ascending=False)
+    dr=dr.sort_values('피추천인매출',ascending=False).reset_index(drop=True)
     sr=st.text_input("🔍 추천인 검색",key="ref_search")
     if sr: dr=dr[dr.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
     st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
