@@ -587,9 +587,10 @@ with tab7:
             hovertemplate='%{x}<br>금액: %{customdata}<extra></extra>',
             customdata=[fmt_krw(abs(v)) for v in wf_values]
         ))
+        wf_tvals, wf_ttexts = krw_tickvals(pd.Series([abs(v) for v in wf_values]))
         fig.update_layout(height=480, margin=dict(l=80, r=30, t=50, b=60),
             xaxis=dict(tickfont=dict(size=13)),
-            yaxis=dict(title='금액', tickfont=dict(size=11)),
+            yaxis=dict(title='금액', tickvals=wf_tvals, ticktext=wf_ttexts, tickfont=dict(size=11)),
             showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -622,7 +623,8 @@ with tab7:
             margin=dict(l=80, r=60, t=50, b=70),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
             xaxis=dict(tickfont=dict(size=12)))
-        fig.update_yaxes(title_text="금액", tickfont=dict(size=11), secondary_y=False)
+        monthly_tvals, monthly_ttexts = krw_tickvals(bw_monthly[['매출액','매출총이익','영업이익']].abs().max())
+        fig.update_yaxes(title_text="금액", tickvals=monthly_tvals, ticktext=monthly_ttexts, tickfont=dict(size=11), secondary_y=False)
         fig.update_yaxes(title_text="영업이익률 (%)", tickfont=dict(size=11), ticksuffix='%', secondary_y=True)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -658,7 +660,8 @@ with tab7:
             height=max(450, len(ch_pnl) * 38 + 140),
             margin=dict(l=130, r=80, t=30, b=40),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-            xaxis=dict(title='매출액', tickfont=dict(size=11), side='bottom'),
+            ch_tvals, ch_ttexts = krw_tickvals(ch_pnl['매출액'])
+            xaxis=dict(title='매출액', tickvals=ch_tvals, ticktext=ch_ttexts, tickfont=dict(size=11), side='bottom'),
             xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
             yaxis=dict(title='', tickfont=dict(size=11))
         )
@@ -713,7 +716,8 @@ with tab7:
                 margin=dict(l=70, r=20, t=30, b=70),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=10)),
                 xaxis=dict(tickfont=dict(size=12)),
-                yaxis=dict(title='판관비', tickfont=dict(size=11)))
+                sga_tvals, sga_ttexts = krw_tickvals(sga_monthly[['광고선전비','운반비','판매수수료','판촉비','기타판관비']].sum(axis=1))
+                yaxis=dict(title='판관비', tickvals=sga_tvals, ticktext=sga_ttexts, tickfont=dict(size=11)))
             st.plotly_chart(fig, use_container_width=True)
 
         # --- 차트 5: 제품계층구조별 수익성 분석 (서브탭) ---
@@ -750,7 +754,8 @@ with tab7:
                 height=max(420, len(pnl) * 30 + 140),
                 margin=dict(l=180, r=80, t=30, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-                xaxis=dict(title='매출액', tickfont=dict(size=11)),
+                pnl_tvals, pnl_ttexts = krw_tickvals(pnl['매출액'])
+                xaxis=dict(title='매출액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
                 xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
                 yaxis=dict(title='', tickfont=dict(size=10))
             )
