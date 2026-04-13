@@ -1120,7 +1120,7 @@ with tab8:
         matched_count = len(match_df)
         confirmed = len(match_df[match_df['매칭등급'] == '확정']) if not match_df.empty else 0
         candidate = len(match_df[match_df['매칭등급'] == '후보']) if not match_df.empty else 0
-        matched_revenue = match_df['총매출'].sum() if not match_df.empty else 0
+        matched_revenue = match_df.drop_duplicates(subset='아이디')['총매출'].sum() if not match_df.empty else 0
         match_rate = (matched_count / total_clinics * 100) if total_clinics > 0 else 0
 
         # KPI
@@ -1202,17 +1202,21 @@ with tab8:
         # --- 매칭 기관 매출 분석 ---
         if not match_df.empty and matched_revenue > 0:
             st.markdown("#### 매칭 기관 매출 TOP 20")
-            top20 = match_df[match_df['총매출'] > 0].sort_values('총매출', ascending=False).head(20)
-            if len(top20) > 0:
-                fig = px.bar(top20, x='총매출', y='상호명_B2B', orientation='h', color='사업유형',
-                    color_discrete_map={'만성질환관리': '#3366CC', '방문진료': '#E8853D', '한의방문진료': '#27AE60'})
+            # 아이디 기준 중복 제거, 사업유형은 합쳐서 라벨로
+            top_dedup = match_df[match_df['총매출'] > 0].copy()
+            top_dedup['사업유형목록'] = top_dedup.groupby('아이디')['사업유형'].transform(lambda x: '/'.join(sorted(x.unique())))
+            top_dedup = top_dedup.drop_duplicates(subset='아이디').sort_values('총매출', ascending=False).head(20)
+            if len(top_dedup) > 0:
+                top_dedup = top_dedup.sort_values('총매출', ascending=True)
+                fig = px.bar(top_dedup, x='총매출', y='상호명_B2B', orientation='h', color='사업유형목록',
+                    color_discrete_sequence=COLORS)
                 fig.update_traces(
-                    text=[fmt_krw_short(v) for v in top20['총매출']], textposition='outside', textfont=dict(size=10),
-                    hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
-                    customdata=[fmt_krw(v) for v in top20['총매출']])
-                top_tvals, top_ttexts = krw_tickvals(top20['총매출'])
-                fig.update_layout(height=max(450, len(top20) * 28 + 140), margin=dict(l=180, r=80, t=30, b=40),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+                    text=[fmt_krw_short(v) for v in top_dedup['총매출']], textposition='outside', textfont=dict(size=10),
+                    hovertemplate='%{y}<br>매출: %{customdata[0]}<br>사업유형: %{customdata[1]}<extra></extra>',
+                    customdata=list(zip([fmt_krw(v) for v in top_dedup['총매출']], top_dedup['사업유형목록'])))
+                top_tvals, top_ttexts = krw_tickvals(top_dedup['총매출'])
+                fig.update_layout(height=max(450, len(top_dedup) * 28 + 140), margin=dict(l=180, r=80, t=30, b=40),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11), title_text='사업유형'),
                     xaxis=dict(title='매출액', tickvals=top_tvals, ticktext=top_ttexts, tickfont=dict(size=11)),
                     yaxis=dict(title='', tickfont=dict(size=10)))
                 st.plotly_chart(fig, use_container_width=True, key="pilot_top20")
