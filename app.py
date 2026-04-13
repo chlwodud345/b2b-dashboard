@@ -1126,18 +1126,17 @@ with tab8:
             st.info("매칭된 기관이 없습니다.")
 
         # --- 미매칭 기관 목록 ---
-        st.markdown("---")
-        with st.expander("미매칭 시범기관 목록 (잠재 영업 대상)"):
-            if not match_df.empty:
-                matched_keys = set(zip(match_df['기관명'], match_df['사업유형']))
-                unmatched = pf[~pf.apply(lambda r: (r['기관명'], r['사업유형']) in matched_keys, axis=1)][['사업유형', '기관명', '기관구분', '주소', '전화번호']].reset_index(drop=True)
-            else:
-                unmatched = pf[['사업유형', '기관명', '기관구분', '주소', '전화번호']].reset_index(drop=True)
-            st.markdown(f"**미매칭: {len(unmatched)}곳**")
-            search_unmatched = st.text_input("🔍 미매칭 기관 검색", key="pilot_unmatched_search")
-            if search_unmatched:
-                unmatched = unmatched[unmatched.apply(lambda r: search_unmatched.lower() in str(r).lower(), axis=1)]
-            st.dataframe(unmatched, use_container_width=True, height=450)
+        st.markdown("#### 미매칭 시범기관 목록 (잠재 영업 대상)")
+        if not match_df.empty:
+            matched_keys = set(zip(match_df['기관명'], match_df['사업유형']))
+            unmatched = pf[~pf.apply(lambda r: (r['기관명'], r['사업유형']) in matched_keys, axis=1)][['사업유형', '기관명', '기관구분', '주소', '전화번호']].reset_index(drop=True)
+        else:
+            unmatched = pf[['사업유형', '기관명', '기관구분', '주소', '전화번호']].reset_index(drop=True)
+        st.markdown(f"**미매칭: {len(unmatched)}곳**")
+        search_unmatched = st.text_input("🔍 미매칭 기관 검색", key="pilot_unmatched_search")
+        if search_unmatched:
+            unmatched = unmatched[unmatched.apply(lambda r: search_unmatched.lower() in str(r).lower(), axis=1)]
+        st.dataframe(unmatched, use_container_width=True, height=450)
 
 # ============================================================
 # 푸터
