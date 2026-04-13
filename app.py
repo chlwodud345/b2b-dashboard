@@ -276,6 +276,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
         return pd.DataFrame()
 
     mem = members_df.copy()
+    mem = mem[(mem['회원타입'] == '병원') & (mem['회원등급'] == '병원')]
     mem['전화번호_norm'] = mem['휴대폰'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
     mem['상호명_norm'] = mem['상호명'].apply(normalize_name)
     mem['시도'] = mem['주소'].apply(normalize_sido)
