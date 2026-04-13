@@ -1126,6 +1126,7 @@ with tab8:
             st.info("매칭된 기관이 없습니다.")
 
         # --- 미매칭 기관 목록 ---
+        st.markdown("---")
         with st.expander("미매칭 시범기관 목록 (잠재 영업 대상)"):
             if not match_df.empty:
                 matched_keys = set(zip(match_df['기관명'], match_df['사업유형']))
