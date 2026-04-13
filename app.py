@@ -250,6 +250,11 @@ def name_similarity(a, b):
     a_stripped = re.sub(suffixes, '', a)
     b_stripped = re.sub(suffixes, '', b)
     if a_stripped and b_stripped and a_stripped == b_stripped: return 98
+    # 진료과목(내과/치과/외과/피부과/안과/이비인후과 등)이 다르면 다른 기관
+    dept_pattern = r'(내과|치과|외과|피부과|안과|이비인후과|정형외과|산부인과|비뇨기과|신경과|정신과|재활의학과|소아과|한의원)'
+    a_dept = re.findall(dept_pattern, a)
+    b_dept = re.findall(dept_pattern, b)
+    if a_dept and b_dept and a_dept != b_dept: return 0
     # 포함 관계
     if a in b or b in a:
         return int(min(len(a), len(b)) / max(len(a), len(b)) * 100)
