@@ -172,61 +172,114 @@ PILOT_SHEETS = {
     '한의방문진료': '일차의료_한의_방문진료'
 }
 
+# 시도 정규화 매핑
+SIDO_NORM = {
+    '서울특별시':'서울','서울시':'서울','서울':'서울',
+    '부산광역시':'부산','부산시':'부산','부산':'부산',
+    '대구광역시':'대구','대구시':'대구','대구':'대구',
+    '인천광역시':'인천','인천시':'인천','인천':'인천',
+    '광주광역시':'광주','광주시':'광주','광주':'광주',
+    '대전광역시':'대전','대전시':'대전','대전':'대전',
+    '울산광역시':'울산','울산시':'울산','울산':'울산',
+    '세종특별자치시':'세종','세종시':'세종','세종':'세종',
+    '경기도':'경기','경기':'경기',
+    '강원특별자치도':'강원','강원도':'강원','강원':'강원',
+    '충청북도':'충북','충북':'충북',
+    '충청남도':'충남','충남':'충남',
+    '전북특별자치도':'전북','전라북도':'전북','전북':'전북',
+    '전라남도':'전남','전남':'전남',
+    '경상북도':'경북','경북':'경북',
+    '경상남도':'경남','경남':'경남',
+    '제주특별자치도':'제주','제주도':'제주','제주':'제주',
+}
+
+def normalize_sido(addr):
+    """주소에서 시도를 정규화하여 추출"""
+    if pd.isna(addr) or not addr: return ''
+    first = str(addr).strip().split()[0] if str(addr).strip() else ''
+    return SIDO_NORM.get(first, first)
+
+def extract_sigungu(addr):
+    """주소에서 시군구 추출 (2번째 단어)"""
+    if pd.isna(addr) or not addr: return ''
+    parts = str(addr).strip().split()
+    return parts[1] if len(parts) > 1 else ''
+
+def normalize_name(name):
+    """상호명 정규화: 공백, 특수문자, 접미어 제거"""
+    if pd.isna(name) or not name: return ''
+    import re
+    s = str(name).strip()
+    s = re.sub(r'[\s\(\)·\-\.\,\']', '', s)
+    # 법인명 접두어 제거
+    for prefix in ['의료법인','사회복지법인','재단법인','학교법인','(의)','(사)','(재)']:
+        s = s.replace(prefix.replace('(','').replace(')',''), '')
+    return s
+
+def name_similarity(a, b):
+    """두 상호명의 유사도 점수 (0~100)"""
+    if not a or not b: return 0
+    # 완전 일치
+    if a == b: return 100
+    # 포함 관계
+    if a in b or b in a:
+        return int(min(len(a), len(b)) / max(len(a), len(b)) * 100)
+    # 공통 글자 비율 (순서 무시)
+    set_a, set_b = set(a), set(b)
+    common = len(set_a & set_b)
+    total = max(len(set_a), len(set_b))
+    if total == 0: return 0
+    base = int(common / total * 100)
+    # 앞글자 일치 보너스
+    prefix_len = 0
+    for ca, cb in zip(a, b):
+        if ca == cb: prefix_len += 1
+        else: break
+    if prefix_len >= 2:
+        base = min(100, base + prefix_len * 5)
+    return base
+
+
 @st.cache_data(ttl=3600, show_spinner="🏥 일차의료 시범기관 데이터를 불러오는 중...")
 def load_pilot_clinics():
     """구글 시트에서 일차의료 시범기관 3종 데이터 로드"""
+    from urllib.parse import quote
     all_frames = []
     for label, sheet_name in PILOT_SHEETS.items():
         try:
-            from urllib.parse import quote
             url = f"https://docs.google.com/spreadsheets/d/{PILOT_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={quote(sheet_name)}"
             df = pd.read_csv(url)
             df.columns = [c.strip() for c in df.columns]
-            # 컬럼 통일
             rename_map = {
-                'NO': 'no',
-                '병원/약국명': '기관명',
-                '병원/약국구분': '기관구분',
-                '전화번호': '전화번호',
-                '우편번호': '우편번호',
-                '소재지주소': '주소',
-                '홈페이지': '홈페이지'
+                'NO': 'no', '병원/약국명': '기관명', '병원/약국구분': '기관구분',
+                '전화번호': '전화번호', '우편번호': '우편번호', '소재지주소': '주소', '홈페이지': '홈페이지'
             }
             df = df.rename(columns=rename_map)
             df['사업유형'] = label
             all_frames.append(df)
-        except Exception:
+        except Exception as e:
+            st.error(f"시트 '{sheet_name}' 로드 실패: {str(e)}")
             continue
     if not all_frames:
         return pd.DataFrame()
     result = pd.concat(all_frames, ignore_index=True)
-    # 매칭용 정규화
     result['전화번호_norm'] = result['전화번호'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
-    result['기관명_norm'] = result['기관명'].fillna('').astype(str).str.replace(r'[\s\(\)·\-\.]', '', regex=True)
-    def extract_region(addr):
-        if pd.isna(addr) or not addr: return ('', '')
-        parts = str(addr).strip().split()
-        sido = parts[0] if len(parts) > 0 else ''
-        sigungu = parts[1] if len(parts) > 1 else ''
-        return (sido, sigungu)
-    result[['시도', '시군구']] = pd.DataFrame(result['주소'].apply(extract_region).tolist(), index=result.index)
+    result['기관명_norm'] = result['기관명'].apply(normalize_name)
+    result['시도'] = result['주소'].apply(normalize_sido)
+    result['시군구'] = result['주소'].apply(extract_sigungu)
     return result
 
 
-def match_pilot_clinics(pilot_df, members_df, orders_df):
-    """일차의료 시범기관 ↔ B2B몰 회원 매칭 (3단계)"""
+def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60):
+    """일차의료 시범기관 ↔ B2B몰 회원 매칭 (개선된 3단계)"""
     if pilot_df.empty or members_df.empty:
         return pd.DataFrame()
+
     mem = members_df.copy()
     mem['전화번호_norm'] = mem['휴대폰'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
-    mem['상호명_norm'] = mem['상호명'].fillna('').astype(str).str.replace(r'[\s\(\)·\-\.]', '', regex=True)
-    def extract_region(addr):
-        if pd.isna(addr) or not addr: return ('', '')
-        parts = str(addr).strip().split()
-        sido = parts[0] if len(parts) > 0 else ''
-        sigungu = parts[1] if len(parts) > 1 else ''
-        return (sido, sigungu)
-    mem[['시도', '시군구']] = pd.DataFrame(mem['주소'].apply(extract_region).tolist(), index=mem.index)
+    mem['상호명_norm'] = mem['상호명'].apply(normalize_name)
+    mem['시도'] = mem['주소'].apply(normalize_sido)
+    mem['시군구'] = mem['주소'].apply(extract_sigungu)
 
     # 주문 집계
     order_agg = orders_df.groupby('주문자 ID').agg(
@@ -251,11 +304,11 @@ def match_pilot_clinics(pilot_df, members_df, orders_df):
                 '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
                 '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
                 '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
-                '매칭방법': '전화번호', '매칭등급': '확정'
+                '매칭방법': '전화번호', '매칭등급': '확정', '유사도': 100
             })
             matched_idx.add(idx)
 
-    # --- Step 2: 상호명 + 지역 정확 매칭 ---
+    # --- Step 2: 시도+시군구 + 상호명 정확 매칭 ---
     mem_region_name = {}
     for _, m in mem.iterrows():
         key = (m['시도'], m['시군구'], m['상호명_norm'])
@@ -271,11 +324,11 @@ def match_pilot_clinics(pilot_df, members_df, orders_df):
                 '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
                 '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
                 '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
-                '매칭방법': '상호명+지역', '매칭등급': '확정'
+                '매칭방법': '상호명+지역', '매칭등급': '확정', '유사도': 100
             })
             matched_idx.add(idx)
 
-    # --- Step 3: 상호명 유사 + 지역 매칭 ---
+    # --- Step 3: 시도+시군구 + 상호명 유사도 매칭 ---
     mem_by_region = {}
     for _, m in mem.iterrows():
         rkey = (m['시도'], m['시군구'])
@@ -285,19 +338,25 @@ def match_pilot_clinics(pilot_df, members_df, orders_df):
         cname = row['기관명_norm']
         rkey = (row['시도'], row['시군구'])
         if not cname or rkey not in mem_by_region: continue
+        best_score = 0
+        best_m = None
         for m in mem_by_region[rkey]:
             mname = m['상호명_norm']
             if not mname: continue
-            if cname in mname or mname in cname:
-                results.append({
-                    '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
-                    '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
-                    '상호명_B2B': m['상호명'], '아이디': m['아이디'], '주소_B2B': m['주소'],
-                    '회원타입': m.get('회원타입', ''), '회원등급': m.get('회원등급', ''),
-                    '매칭방법': '상호명유사+지역', '매칭등급': '후보'
-                })
-                matched_idx.add(idx)
-                break
+            score = name_similarity(cname, mname)
+            if score > best_score:
+                best_score = score
+                best_m = m
+        if best_score >= similarity_threshold and best_m is not None:
+            grade = '확정' if best_score >= 85 else '후보'
+            results.append({
+                '기관명': row['기관명'], '기관구분': row.get('기관구분', ''), '사업유형': row['사업유형'],
+                '주소_공공': row['주소'], '전화번호_공공': row['전화번호'],
+                '상호명_B2B': best_m['상호명'], '아이디': best_m['아이디'], '주소_B2B': best_m['주소'],
+                '회원타입': best_m.get('회원타입', ''), '회원등급': best_m.get('회원등급', ''),
+                '매칭방법': f'유사도매칭({best_score}%)', '매칭등급': grade, '유사도': best_score
+            })
+            matched_idx.add(idx)
 
     if not results:
         return pd.DataFrame()
@@ -306,7 +365,7 @@ def match_pilot_clinics(pilot_df, members_df, orders_df):
     result_df['총매출'] = result_df['총매출'].fillna(0)
     result_df['주문건수'] = result_df['주문건수'].fillna(0).astype(int)
     result_df['최근주문일'] = result_df['최근주문일'].fillna('-')
-    return result_df
+    return result_df.sort_values('유사도', ascending=False)
     
 # ============================================================
 # 데이터 로드 (구글 드라이브)
