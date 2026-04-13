@@ -310,6 +310,23 @@ def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60
     if pilot_df.empty or members_df.empty:
         return pd.DataFrame()
 
+    # 수동 매칭 (자동 매칭이 어려운 예외 케이스)
+    MANUAL_MATCH = {
+        '건강드림내과의원': 'happydream',  # 실제 B2B 아이디로 교체
+        '구로연세의원': 'kuroyonsei',
+        '상인내과의원': 'sangin',
+        '서울배내과의원': 'flowerbae',
+        '성모가정의학과의원': 'fmkjm4',
+        '아세아연합의원': 'hyyk1213',
+        '웰봄내과의원': 'wbch01739',
+        '이시아연합속내과의원': 'stereon',
+        '차만진가정의학과의원': 'sssky91',
+        '참사랑내과의원': 'jhs7575',
+        '첨단가족연합의원': 'tontokim',
+        '하늘내과의원': 'skymed0813',
+        '한양류마유내과의원': 'hyrmu',
+    }
+
     mem = members_df.copy()
     mem = mem[(mem['회원타입'] == '병원') & (mem['회원등급'] == '병원')]
     mem['전화번호_norm'] = mem['휴대폰'].fillna('').astype(str).str.replace(r'[^0-9]', '', regex=True)
