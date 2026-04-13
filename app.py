@@ -656,11 +656,11 @@ with tab7:
             hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
             xaxis='x2'
         ), secondary_y=False)
+        ch_tvals, ch_ttexts = krw_tickvals(ch_pnl['매출액'])
         fig.update_layout(
             height=max(450, len(ch_pnl) * 38 + 140),
             margin=dict(l=130, r=80, t=30, b=40),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-            ch_tvals, ch_ttexts = krw_tickvals(ch_pnl['매출액'])
             xaxis=dict(title='매출액', tickvals=ch_tvals, ticktext=ch_ttexts, tickfont=dict(size=11), side='bottom'),
             xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
             yaxis=dict(title='', tickfont=dict(size=11))
@@ -750,11 +750,11 @@ with tab7:
                 hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
                 xaxis='x2'
             ), secondary_y=False)
+            pnl_tvals, pnl_ttexts = krw_tickvals(pnl['매출액'])
             fig.update_layout(
                 height=max(420, len(pnl) * 30 + 140),
                 margin=dict(l=180, r=80, t=30, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-                pnl_tvals, pnl_ttexts = krw_tickvals(pnl['매출액'])
                 xaxis=dict(title='매출액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
                 xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
                 yaxis=dict(title='', tickfont=dict(size=10))
