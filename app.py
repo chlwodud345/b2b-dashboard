@@ -822,7 +822,7 @@ with tab7:
                 '매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원',
                 '매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원',
                 '영업이익률':'{:.1f}%','판매수량':'{:,.0f}'
-            }).applymap(highlight_negative, subset=['영업이익','영업이익률']),
+            }).map(highlight_negative, subset=['영업이익','영업이익률']),
             use_container_width=True, height=550
         )
 
