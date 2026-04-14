@@ -1308,13 +1308,7 @@ with tab7:
 # ============================================================
 with tab8:
     pilot_df = load_pilot_clinics()
-    match_df = match_pilot_clinics(pilot_df, members, orders)
-
-    # render 함수들에 인자로 전달
-    render_pilot_type_bar(pilot_df, match_df)
-    render_pilot_match_donut(pilot_df, match_df)
-    render_pilot_region_bar(pilot_df, match_df)
-    
+    match_df = match_pilot_clinics(pilot_df, members, orders)    
     if pilot_df.empty:
         st.warning("⚠️ 일차의료 시범기관 데이터를 불러올 수 없습니다.")
     else:
