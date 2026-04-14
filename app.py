@@ -717,6 +717,15 @@ with tab4:
         st.plotly_chart(fig, use_container_width=True)
         # --- 휴면/활성 회원 분석 ---
     st.markdown("#### 휴면 · 활성 회원 분석")
+    st.markdown("""
+    <div style='background:#f8fafc;border-radius:10px;padding:12px 20px;margin-bottom:16px;border:1px solid #e2e8f0;font-size:0.85rem;color:#475569;'>
+    🟢 <b>활성</b> 최근 3개월 이내 주문 &nbsp;|&nbsp;
+    🟡 <b>단기휴면</b> 3~6개월 &nbsp;|&nbsp;
+    🟠 <b>중기휴면</b> 6~12개월 &nbsp;|&nbsp;
+    🔴 <b>장기휴면</b> 12개월 이상 &nbsp;|&nbsp;
+    ⚪ <b>미구매</b> 가입 후 주문 없음
+    </div>
+    """, unsafe_allow_html=True)
 
     # 기준일 (가장 최근 주문일 기준)
     base_date = orders['주문일'].max()
