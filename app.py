@@ -1189,7 +1189,6 @@ with tab8:
 
         with c2:
             st.markdown("#### 매칭 현황")
-            status_df = pd.DataFrame({
             has_revenue = match_df[match_df['총매출'] > 0]['아이디'].nunique() if not match_df.empty else 0
             no_revenue = match_df[match_df['총매출'] == 0]['아이디'].nunique() if not match_df.empty else 0
             status_df = pd.DataFrame({
