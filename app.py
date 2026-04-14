@@ -1009,6 +1009,10 @@ with tab7:
 
         # --- 차트 5: 제품계층구조별 수익성 분석 (서브탭) ---
         st.markdown("#### 제품계층구조별 수익성 분석")
+        prod_ch_opts = sorted(bw['채널'].unique().tolist())
+        sel_prod_ch = st.multiselect("채널 필터", prod_ch_opts, default=[], placeholder="전체 (선택 안 하면 전체 채널)", key="bw_prod_channel")
+        bw_prod = bw[bw['채널'].isin(sel_prod_ch)] if sel_prod_ch else bw
+
         prod_sub1, prod_sub2, prod_sub3 = st.tabs(["대분류", "중분류", "소분류"])
 
         def render_product_pnl(df, group_col, tab_key):
@@ -1069,20 +1073,18 @@ with tab7:
             }), use_container_width=True, height=400)
 
         with prod_sub1:
-            render_product_pnl(bw, '제품계층구조(대)', 'large')
+            render_product_pnl(bw_prod, '제품계층구조(대)', 'large')
 
         with prod_sub2:
-            # 대분류 필터 연동
-            sel_large = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_mid_filter")
-            bw_mid = bw if sel_large == "전체" else bw[bw['제품계층구조(대)'] == sel_large]
+            sel_large = st.selectbox("대분류 선택", ["전체"] + sorted(bw_prod['제품계층구조(대)'].unique().tolist()), key="bw_mid_filter")
+            bw_mid = bw_prod if sel_large == "전체" else bw_prod[bw_prod['제품계층구조(대)'] == sel_large]
             render_product_pnl(bw_mid, '제품계층구조(중)', 'medium')
 
         with prod_sub3:
-            # 대분류 + 중분류 필터 연동
             c1, c2 = st.columns(2)
             with c1:
-                sel_large2 = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_small_filter_l")
-            bw_small = bw if sel_large2 == "전체" else bw[bw['제품계층구조(대)'] == sel_large2]
+                sel_large2 = st.selectbox("대분류 선택", ["전체"] + sorted(bw_prod['제품계층구조(대)'].unique().tolist()), key="bw_small_filter_l")
+            bw_small = bw_prod if sel_large2 == "전체" else bw_prod[bw_prod['제품계층구조(대)'] == sel_large2]
             with c2:
                 mid_opts = sorted(bw_small['제품계층구조(중)'].unique().tolist())
                 sel_mid = st.selectbox("중분류 선택", ["전체"] + mid_opts, key="bw_small_filter_m")
