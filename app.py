@@ -914,11 +914,9 @@ def render_material_pnl_table():
         return ''
     st.dataframe(mat_pnl.style.format({'매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원','매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%','판매수량':'{:,.0f}'}).map(highlight_negative,subset=['영업이익','영업이익률']),use_container_width=True,height=550)
 
-def render_pilot_type_bar():
+def render_pilot_type_bar(pilot_df, match_df):
     st.markdown("#### 사업유형별 기관 수")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     type_summary = pilot_df['사업유형'].value_counts().reset_index(); type_summary.columns = ['사업유형','기관수']
     if not match_df.empty:
         type_matched = match_df.groupby('사업유형').size().reset_index(name='가입수')
@@ -932,11 +930,9 @@ def render_pilot_type_bar():
     fig.update_layout(height=450,barmode='stack',margin=dict(l=60,r=30,t=30,b=40),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='기관 수',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
 
-def render_pilot_match_donut():
+def render_pilot_match_donut(pilot_df, match_df):
     st.markdown("#### 매칭 현황")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     total_clinics = len(pilot_df); matched_count = len(match_df)
     has_revenue = match_df[match_df['총매출']>0]['아이디'].nunique() if not match_df.empty else 0
     no_revenue = match_df[match_df['총매출']==0]['아이디'].nunique() if not match_df.empty else 0
@@ -946,11 +942,9 @@ def render_pilot_match_donut():
     fig.update_layout(height=450)
     st.plotly_chart(fig, use_container_width=True)
 
-def render_pilot_region_bar():
+def render_pilot_region_bar(pilot_df, match_df):
     st.markdown("#### 지역별 시범기관 분포")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     region_all = pilot_df['시도'].value_counts().reset_index(); region_all.columns = ['지역','시범기관수']
     if not match_df.empty:
         region_matched = match_df.copy(); region_matched['지역'] = region_matched['주소_공공'].apply(normalize_sido)
@@ -966,11 +960,9 @@ def render_pilot_region_bar():
     fig.update_layout(height=max(450,len(region_all)*28+140),barmode='stack',margin=dict(l=100,r=30,t=30,b=40),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(title='기관 수',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
 
-def render_pilot_top20():
+def render_pilot_top20(pilot_df, match_df):
     st.markdown("#### 매칭 기관 매출 TOP 20")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     if match_df.empty: st.info("매칭된 기관이 없습니다."); return
     top_dedup = match_df[match_df['총매출']>0].copy()
     top_dedup['사업유형목록'] = top_dedup.groupby('아이디')['사업유형'].transform(lambda x:'/'.join(sorted(x.unique())))
@@ -987,22 +979,18 @@ def render_pilot_top20():
     fig.update_layout(height=max(450,len(top_dedup)*28+140),margin=dict(l=180,r=80,t=30,b=40),showlegend=True,legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(title='매출액',tickvals=top_tvals,ticktext=top_ttexts,tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=10)))
     st.plotly_chart(fig, use_container_width=True)
 
-def render_pilot_match_table():
+def render_pilot_match_table(pilot_df, match_df):
     st.markdown("#### 매칭 기관 상세")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     if match_df.empty: st.info("매칭된 기관이 없습니다."); return
     display_df = match_df.sort_values('총매출',ascending=False).reset_index(drop=True)
     search_pilot = st.text_input("🔍 기관명/상호명 검색",key="custom_pilot_search")
     if search_pilot: display_df = display_df[display_df.apply(lambda r:search_pilot.lower() in str(r['기관명']).lower() or search_pilot.lower() in str(r['상호명_B2B']).lower(),axis=1)]
     st.dataframe(display_df.style.format({'총매출':'{:,.0f}원','주문건수':'{:,.0f}건'}),use_container_width=True,height=550)
 
-def render_pilot_unmatched_table():
+def render_pilot_unmatched_table(pilot_df, match_df):
     st.markdown("#### 미매칭 시범기관 목록 (잠재 영업 대상)")
-    pilot_df = load_pilot_clinics()
     if pilot_df.empty: st.warning("데이터 없음"); return
-    match_df = match_pilot_clinics(pilot_df, members, orders)
     if not match_df.empty:
         matched_keys = set(zip(match_df['기관명'],match_df['사업유형']))
         unmatched = pilot_df[~pilot_df.apply(lambda r:(r['기관명'],r['사업유형']) in matched_keys,axis=1)][['사업유형','기관명','기관구분','주소','전화번호']].reset_index(drop=True)
@@ -1057,11 +1045,11 @@ CHART_REGISTRY = {
     "C32": {"name": "🏷️ 제품계층구조별 수익성 분석", "tab": "손익 분석", "fn": render_product_pnl_hierarchy},
     "C33": {"name": "🔩 자재별 손익 현황 테이블", "tab": "손익 분석", "fn": render_material_pnl_table},
     # 일차의료 시범기관 (5 → 6개로 수정: 기존 5개 + 테이블1 추가 → 실제는 6)
-    "C34": {"name": "🏥 사업유형별 기관 수", "tab": "일차의료 시범기관", "fn": render_pilot_type_bar},
-    "C35": {"name": "🔍 매칭 현황 도넛", "tab": "일차의료 시범기관", "fn": render_pilot_match_donut},
-    "C36": {"name": "🗾 지역별 시범기관 분포", "tab": "일차의료 시범기관", "fn": render_pilot_region_bar},
-    "C37": {"name": "🥇 매칭 기관 매출 TOP 20", "tab": "일차의료 시범기관", "fn": render_pilot_top20},
-    "C38": {"name": "📋 매칭 기관 상세 테이블", "tab": "일차의료 시범기관", "fn": render_pilot_match_table},
+    "C34": {"name": "🏥 사업유형별 기관 수", "tab": "일차의료 시범기관", "fn": lambda: render_pilot_type_bar(pilot_df, match_df)},
+    "C35": {"name": "🔍 매칭 현황 도넛", "tab": "일차의료 시범기관", "fn": lambda: render_pilot_match_donut(pilot_df, match_df)},
+    "C36": {"name": "🗾 지역별 시범기관 분포", "tab": "일차의료 시범기관", "fn": lambda: render_pilot_region_bar(pilot_df, match_df)},
+    "C37": {"name": "🥇 매칭 기관 매출 TOP 20", "tab": "일차의료 시범기관", "fn": lambda: render_pilot_top20(pilot_df, match_df)},
+    "C38": {"name": "📋 매칭 기관 상세 테이블", "tab": "일차의료 시범기관", "fn": lambda: render_pilot_match_table(pilot_df, match_df)},
 }
 
 # ============================================================
@@ -1343,10 +1331,10 @@ with tab8:
         for col,(l,v,u) in zip(cols,[("시범기관 수",fmt_num(total_clinics),"곳"),("B2B몰 가입",fmt_num(matched_count),"곳"),("가입률",fmt_pct(match_rate),""),("확정 매칭",fmt_num(confirmed),"곳"),("후보 매칭",fmt_num(candidate),"곳"),("가입기관 매출",fmt_krw_short(matched_revenue),"원")]):
             col.markdown(kpi_card(l,v,u), unsafe_allow_html=True)
         c1,c2=st.columns(2)
-        with c1: render_pilot_type_bar()
-        with c2: render_pilot_match_donut()
-        render_pilot_region_bar()
-        if not match_df.empty and matched_revenue > 0: render_pilot_top20()
+        with c1: render_pilot_type_bar(pilot_df, match_df)
+        with c2: render_pilot_match_donut(pilot_df, match_df)
+        render_pilot_region_bar(pilot_df, match_df)
+        if not match_df.empty and matched_revenue > 0: render_pilot_top20(pilot_df, match_df)
         st.markdown("#### 매칭 기관 상세")
         match_filter = st.selectbox("매칭등급 필터",["전체","확정","후보"],key="pilot_match_filter")
         display_df = match_df.copy() if not match_df.empty else pd.DataFrame()
