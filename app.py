@@ -73,15 +73,16 @@ def krw_tickvals(series, n=5):
     vals = np.linspace(0, mx * 1.05, n).tolist()
     texts = [fmt_krw_short(v) for v in vals]
     return vals, texts
-def make_donut(df, name_col, value_col, colors=None):
+def make_donut(df, name_col, value_col, colors=None, value_label='매출', unit='원'):
     total = df[value_col].sum()
     fig = go.Figure()
     fig.add_trace(go.Pie(labels=df[name_col], values=df[value_col], hole=0.55,
         marker=dict(colors=(colors or COLORS)[:len(df)]),
         textinfo='label+percent', textposition='inside', insidetextorientation='horizontal', textfont=dict(size=11),
-        hovertemplate='%{label}<br>매출: %{customdata}<br>비중: %{percent}<extra></extra>',
-        customdata=[f"{v:,.0f}원" for v in df[value_col]]))
-    fig.add_annotation(text=f"<b>합계</b><br>{fmt_krw(total)}", x=0.5, y=0.5, font=dict(size=15, color='#1e293b'), showarrow=False, xref='paper', yref='paper')
+        hovertemplate='%{label}<br>' + value_label + ': %{customdata}<br>비중: %{percent}<extra></extra>',
+        customdata=[f"{v:,.0f}{unit}" for v in df[value_col]]))
+    total_fmt = f"{total:,.0f}{unit}" if unit != '원' else fmt_krw(total)
+    fig.add_annotation(text=f"<b>합계</b><br>{total_fmt}", x=0.5, y=0.5, font=dict(size=15, color='#1e293b'), showarrow=False, xref='paper', yref='paper')
     fig.update_layout(height=520, margin=dict(l=20, r=20, t=30, b=140),
         legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=11), traceorder='normal'), showlegend=True)
     return fig
@@ -1193,7 +1194,7 @@ with tab8:
                 '수': [confirmed, candidate, total_clinics - matched_count]
             })
             status_df = status_df[status_df['수'] > 0]
-            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#F39C12', '#BDC3C7'])
+            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#F39C12', '#BDC3C7'], value_label='기관수', unit='곳')
             fig.update_layout(height=450)
             fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(total_clinics)}곳"
             st.plotly_chart(fig, use_container_width=True, key="pilot_match_donut")
