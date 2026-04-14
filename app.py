@@ -712,7 +712,16 @@ with tab4:
         rd.append(row)
     if rd:
         rdf=pd.DataFrame(rd); mc=[f'{o}개월' for o in range(mx)]; zv=rdf[mc].values
-        fig=go.Figure(data=go.Heatmap(z=zv,x=mc,y=[f"{to_ym_kr(r['코호트'])} ({r['크기']}처)" for _,r in rdf.iterrows()],colorscale=[[0,'#F0F2F5'],[0.3,'#A8D5A2'],[1,'#27AE60']],text=[[f'{v:.1f}%' if v>0 else '-' for v in row] for row in zv],texttemplate='%{text}',textfont=dict(size=10),hovertemplate='%{y}<br>%{x}: %{z:.1f}%<extra></extra>'))
+        hover_texts = []
+        for _, r in rdf.iterrows():
+            cohort_period = pd.Period(r['코호트'], freq='M')
+            row_hover = []
+            for offset in range(mx):
+                actual = cohort_period + offset
+                actual_kr = f"{actual.year}년 {actual.month}월"
+                row_hover.append(f"{offset}개월 후 ({actual_kr})")
+            hover_texts.append(row_hover)           
+        fig=go.Figure(data=go.Heatmap(z=zv,x=mc,y=[f"{to_ym_kr(r['코호트'])} ({r['크기']}처)" for _,r in rdf.iterrows()],colorscale=[[0,'#F0F2F5'],[0.3,'#A8D5A2'],[1,'#27AE60']],text=[[f'{v:.1f}%' if v>0 else '-' for v in row] for row in zv],texttemplate='%{text}',textfont=dict(size=10),customdata=hover_texts,hovertemplate='%{y}<br>%{customdata}: %{z:.1f}%<extra></extra>'))
         fig.update_layout(height=max(400,len(rd)*32+140),margin=dict(l=190,r=20,t=20,b=50),yaxis=dict(tickfont=dict(size=10),autorange="reversed"),xaxis=dict(tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
         # --- 휴면/활성 회원 분석 ---
