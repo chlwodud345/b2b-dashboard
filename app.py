@@ -629,7 +629,7 @@ with tab3:
         td = filtered[filtered['상품명'].isin(sel)].groupby(['주문월','상품명'])['판매합계금액'].sum().reset_index(); td['주문월_kr'] = ym_series_kr(td['주문월'])
         fig = px.line(td,x='주문월_kr',y='판매합계금액',color='상품명',markers=True,color_discrete_sequence=COLORS)
         for tr in fig.data:
-            tr.customdata = [fmt_krw(v) for v in tr.y]; tr.hovertemplate = '%{x}<br>' + (tr.name[:20]+'...' if len(tr.name)>20 else tr.name) + '<br>매출: %{customdata}<extra></extra>'
+            tr.customdata = [f"{v:,.0f}원" for v in tr.y]; tr.hovertemplate = '%{x}<br>' + (tr.name[:20]+'...' if len(tr.name)>20 else tr.name) + '<br>매출: %{customdata}<extra></extra>'
             if len(tr.name) > 22: tr.name = tr.name[:22]+'...'
         fig.update_layout(height=480,margin=dict(l=70,r=30,t=30,b=120),legend=dict(orientation="h",yanchor="top",y=-0.15,x=0,font=dict(size=10)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
