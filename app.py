@@ -740,6 +740,8 @@ with tab4:
 
     # 임시 확인용
     st.write(referrals_df.columns.tolist())
+    st.write("추천인 시트 사업자번호 샘플:", referrals_df['피추천인 사업자 번호'].head(5).tolist())
+    st.write("회원정보 시트 사업자번호 샘플:", dormant_df['사업자번호'].head(5).tolist())
 
     # 추천인 정보 merge
     ref_info = referrals_df.groupby('피추천인 사업자 번호').first()[['추천인']].reset_index()
