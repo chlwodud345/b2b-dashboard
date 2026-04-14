@@ -854,6 +854,7 @@ with tab4:
 # Tab 5. 추천인 분석
 # ============================================================
 with tab5:
+    st.write(referrals_df['회원그룹'].unique().tolist())
     clm={}
     for _,r in referrals_df.iterrows():
         n=str(r.get('추천인','')).strip(); g=str(r.get('회원그룹',''))
