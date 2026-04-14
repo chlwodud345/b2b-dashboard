@@ -738,11 +738,6 @@ with tab4:
     dormant_df = members.copy()
     dormant_df = dormant_df.merge(last_order, on='아이디', how='left')
 
-    # 추천인 정보 merge
-    ref_info = referrals_df.groupby('피추천인 사업자 번호').first()[['추천인']].reset_index()
-    ref_info.columns = ['사업자번호', '추천인']
-    dormant_df = dormant_df.merge(ref_info, on='사업자번호', how='left')
-
     # 휴면경과일 계산
     dormant_df['휴면경과일'] = (base_date - dormant_df['마지막주문일']).dt.days
 
