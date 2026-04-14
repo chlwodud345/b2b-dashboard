@@ -277,6 +277,7 @@ def load_pilot_clinics():
     result['도로명'] = result['주소'].apply(extract_road)
     return result
 
+@st.cache_data(ttl=3600, hash_funcs={pd.DataFrame: lambda df: df.shape})
 def match_pilot_clinics(pilot_df, members_df, orders_df, similarity_threshold=60):
     if pilot_df.empty or members_df.empty:
         return pd.DataFrame()
@@ -1319,6 +1320,13 @@ with tab7:
 # ============================================================
 with tab8:
     pilot_df = load_pilot_clinics()
+    match_df = match_pilot_clinics(pilot_df, members, orders)
+
+    # render 함수들에 인자로 전달
+    render_pilot_type_bar(pilot_df, match_df)
+    render_pilot_match_donut(pilot_df, match_df)
+    render_pilot_region_bar(pilot_df, match_df)
+    
     if pilot_df.empty:
         st.warning("⚠️ 일차의료 시범기관 데이터를 불러올 수 없습니다.")
     else:
