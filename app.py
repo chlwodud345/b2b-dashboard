@@ -557,13 +557,13 @@ with tab1:
         st.markdown("#### 지역별 매출")
         rg = filtered.groupby('지역')['판매합계금액'].sum().sort_values().reset_index(); rg.columns = ['지역','매출']
         fig = px.bar(rg,x='매출',y='지역',orientation='h',color_discrete_sequence=COLORS)
-        fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[fmt_krw(v) for v in rg['매출']])
+        fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in rg['매출']])
         fig.update_layout(height=520,margin=dict(l=70,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
         st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 일별 매출 추이")
     daily = filtered.groupby('주문일자')['판매합계금액'].sum().reset_index(); daily.columns = ['날짜','매출']
     fig = px.area(daily,x='날짜',y='매출',color_discrete_sequence=['#3366CC'])
-    fig.update_traces(customdata=list(zip(daily['날짜'].apply(to_date_kr),[fmt_krw(v) for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
+    fig.update_tracescustomdata=list(zip(daily['날짜'].apply(to_date_kr),[f"{v:,.0f}원" for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
     tvals2, ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11),title_font=dict(size=13)))
     st.plotly_chart(fig, use_container_width=True)
@@ -575,13 +575,13 @@ with tab2:
     st.markdown("#### 회원구분별 × 월별 매출 추이")
     tm_df = filtered.groupby(['주문월','주문자 구분'])['판매합계금액'].sum().reset_index(); tm_df['주문월_kr'] = ym_series_kr(tm_df['주문월'])
     fig = px.bar(tm_df,x='주문월_kr',y='판매합계금액',color='주문자 구분',color_discrete_sequence=COLORS)
-    for tr in fig.data: tr.customdata = [fmt_krw(v) for v in tr.y]; tr.hovertemplate = '%{x}<br>' + tr.name + ': %{customdata}<extra></extra>'
+    for tr in fig.data: tr.customdata = [f"{v:,.0f}원" for v in tr.y]; tr.hovertemplate = '%{x}<br>' + tr.name + ': %{customdata}<extra></extra>'
     fig.update_layout(height=480,barmode='stack',margin=dict(l=70,r=30,t=50,b=70),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 회원등급별 매출")
     gs = filtered.groupby('회원 등급').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문회원수=('주문자 ID','nunique')).reset_index().sort_values('매출')
     fig = px.bar(gs,x='매출',y='회원 등급',orientation='h',color_discrete_sequence=COLORS)
-    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>회원: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([fmt_krw(v) for v in gs['매출']], gs['주문건수'], gs['주문회원수'])))
+    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>회원: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']], gs['주문건수'], gs['주문회원수'])))
     fig.update_layout(height=max(420,len(gs)*35+140),margin=dict(l=140,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 요일 · 시간대별 주문 매출 히트맵")
@@ -607,7 +607,7 @@ with tab3:
     st.markdown("#### 상품별 매출 TOP 20 (파레토 차트)")
     top20 = pa.head(20).copy(); ttl = pa['매출'].sum(); top20['누적비중'] = (top20['매출'].cumsum()/ttl*100).round(1)
     fig = make_subplots(specs=[[{"secondary_y":True}]])
-    fig.add_trace(go.Bar(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>',customdata=list(zip(top20['상품명'],[fmt_krw(v) for v in top20['매출']]))),secondary_y=False)
+    fig.add_trace(go.Bar(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>',customdata=list(zip(top20['상품명'],[f"{v:,.0f}원" for v in top20['매출']]))),secondary_y=False)
     fig.add_trace(go.Scatter(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['누적비중'],name='누적 비중',line=dict(color='#E8853D',width=3),mode='lines+markers',marker=dict(size=7),hovertemplate='%{customdata}<br>누적 비중: %{y:.1f}%<extra></extra>',customdata=top20['상품명'].tolist()),secondary_y=True)
     tvals3, ttexts3 = krw_tickvals(top20['매출'])
     fig.update_layout(height=540,margin=dict(l=80,r=60,t=50,b=150),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=12)),xaxis=dict(tickangle=45,tickfont=dict(size=9)))
@@ -1250,7 +1250,7 @@ with tab8:
                     orientation='h', marker_color=bar_colors, showlegend=False,
                     text=[fmt_krw_short(v) for v in top_dedup['총매출']], textposition='outside', textfont=dict(size=10),
                     hovertemplate='%{y}<br>매출: %{customdata[0]}<br>사업유형: %{customdata[1]}<extra></extra>',
-                    customdata=list(zip([fmt_krw(v) for v in top_dedup['총매출']], top_dedup['사업유형목록']))
+                    customdata=list(zip([f"{v:,.0f}원" for v in top_dedup['총매출']], top_dedup['사업유형목록']))
                 ))
                 top_tvals, top_ttexts = krw_tickvals(top_dedup['총매출'])
                 for label, color in [('만성질환관리','#3366CC'),('방문진료','#E8853D'),('한의방문진료','#27AE60'),('만성질환관리/방문진료','#9B59B6'),('만성질환관리/한의방문진료','#1ABC9C')]:
