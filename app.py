@@ -116,7 +116,7 @@ def download_from_gdrive(file_id):
     import tempfile, os
     tmp = tempfile.mktemp(suffix='.xlsx')
     url = f'https://drive.google.com/uc?id={file_id}'
-    gdown.download(url, tmp, quiet=True, fuzzy=True)
+    gdown.download(url, tmp, quiet=True)
     with open(tmp, 'rb') as f:
         content = f.read()
     os.remove(tmp)
