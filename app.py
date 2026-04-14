@@ -1190,13 +1190,16 @@ with tab8:
         with c2:
             st.markdown("#### 매칭 현황")
             status_df = pd.DataFrame({
-                '구분': ['확정 매칭', '후보 매칭', '미매칭'],
-                '수': [confirmed, candidate, total_clinics - matched_count]
+            has_revenue = match_df[match_df['총매출'] > 0]['아이디'].nunique() if not match_df.empty else 0
+            no_revenue = match_df[match_df['총매출'] == 0]['아이디'].nunique() if not match_df.empty else 0
+            status_df = pd.DataFrame({
+                '구분': ['매출 발생', '매출 미발생(휴면)', '미가입'],
+                '수': [has_revenue, no_revenue, total_clinics - matched_count]
             })
             status_df = status_df[status_df['수'] > 0]
-            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#F39C12', '#BDC3C7'], value_label='기관수', unit='곳')
+            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#E8853D', '#BDC3C7'], value_label='기관수', unit='곳')
             fig.update_layout(height=450)
-            fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(total_clinics)}곳"
+            fig.layout.annotations[0].text = f"<b>매칭기관</b><br>{fmt_num(matched_count)}곳"
             st.plotly_chart(fig, use_container_width=True, key="pilot_match_donut")
 
         # --- 지역별 분포 ---
