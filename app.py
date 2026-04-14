@@ -854,10 +854,6 @@ with tab4:
 # Tab 5. 추천인 분석
 # ============================================================
 with tab5:
-    st.write(referrals_df['회원그룹'].unique().tolist())
-    st.write("영업팀 행 수:", len(referrals_df[referrals_df['회원그룹'] == '영업팀']))
-    st.write("대리점 행 수:", len(referrals_df[referrals_df['회원그룹'] == '대리점 회원']))
-    st.write("추천인 샘플(영업팀):", referrals_df[referrals_df['회원그룹'] == '영업팀']['추천인'].head(5).tolist())
     clm={}
     for _,r in referrals_df.iterrows():
         n=str(r.get('추천인','')).strip(); g=str(r.get('회원그룹',''))
