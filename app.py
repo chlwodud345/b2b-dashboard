@@ -73,15 +73,16 @@ def krw_tickvals(series, n=5):
     vals = np.linspace(0, mx * 1.05, n).tolist()
     texts = [fmt_krw_short(v) for v in vals]
     return vals, texts
-def make_donut(df, name_col, value_col, colors=None):
+def make_donut(df, name_col, value_col, colors=None, value_label='매출', unit='원'):
     total = df[value_col].sum()
     fig = go.Figure()
     fig.add_trace(go.Pie(labels=df[name_col], values=df[value_col], hole=0.55,
         marker=dict(colors=(colors or COLORS)[:len(df)]),
         textinfo='label+percent', textposition='inside', insidetextorientation='horizontal', textfont=dict(size=11),
-        hovertemplate='%{label}<br>매출: %{customdata}<br>비중: %{percent}<extra></extra>',
-        customdata=[f"{v:,.0f}원" for v in df[value_col]]))
-    fig.add_annotation(text=f"<b>합계</b><br>{fmt_krw(total)}", x=0.5, y=0.5, font=dict(size=15, color='#1e293b'), showarrow=False, xref='paper', yref='paper')
+        hovertemplate='%{label}<br>' + value_label + ': %{customdata}<br>비중: %{percent}<extra></extra>',
+        customdata=[f"{v:,.0f}{unit}" for v in df[value_col]]))
+    total_fmt = f"{total:,.0f}{unit}" if unit != '원' else fmt_krw(total)
+    fig.add_annotation(text=f"<b>합계</b><br>{total_fmt}", x=0.5, y=0.5, font=dict(size=15, color='#1e293b'), showarrow=False, xref='paper', yref='paper')
     fig.update_layout(height=520, margin=dict(l=20, r=20, t=30, b=140),
         legend=dict(orientation="h", yanchor="top", y=-0.02, xanchor="center", x=0.5, font=dict(size=11), traceorder='normal'), showlegend=True)
     return fig
@@ -556,13 +557,13 @@ with tab1:
         st.markdown("#### 지역별 매출")
         rg = filtered.groupby('지역')['판매합계금액'].sum().sort_values().reset_index(); rg.columns = ['지역','매출']
         fig = px.bar(rg,x='매출',y='지역',orientation='h',color_discrete_sequence=COLORS)
-        fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[fmt_krw(v) for v in rg['매출']])
+        fig.update_traces(text=[fmt_krw_short(v) for v in rg['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in rg['매출']])
         fig.update_layout(height=520,margin=dict(l=70,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
         st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 일별 매출 추이")
     daily = filtered.groupby('주문일자')['판매합계금액'].sum().reset_index(); daily.columns = ['날짜','매출']
     fig = px.area(daily,x='날짜',y='매출',color_discrete_sequence=['#3366CC'])
-    fig.update_traces(customdata=list(zip(daily['날짜'].apply(to_date_kr),[fmt_krw(v) for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
+    fig.update_traces(customdata=list(zip(daily['날짜'].apply(to_date_kr),[f"{v:,.0f}원" for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
     tvals2, ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11),title_font=dict(size=13)))
     st.plotly_chart(fig, use_container_width=True)
@@ -574,13 +575,13 @@ with tab2:
     st.markdown("#### 회원구분별 × 월별 매출 추이")
     tm_df = filtered.groupby(['주문월','주문자 구분'])['판매합계금액'].sum().reset_index(); tm_df['주문월_kr'] = ym_series_kr(tm_df['주문월'])
     fig = px.bar(tm_df,x='주문월_kr',y='판매합계금액',color='주문자 구분',color_discrete_sequence=COLORS)
-    for tr in fig.data: tr.customdata = [fmt_krw(v) for v in tr.y]; tr.hovertemplate = '%{x}<br>' + tr.name + ': %{customdata}<extra></extra>'
+    for tr in fig.data: tr.customdata = [f"{v:,.0f}원" for v in tr.y]; tr.hovertemplate = '%{x}<br>' + tr.name + ': %{customdata}<extra></extra>'
     fig.update_layout(height=480,barmode='stack',margin=dict(l=70,r=30,t=50,b=70),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 회원등급별 매출")
     gs = filtered.groupby('회원 등급').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문회원수=('주문자 ID','nunique')).reset_index().sort_values('매출')
     fig = px.bar(gs,x='매출',y='회원 등급',orientation='h',color_discrete_sequence=COLORS)
-    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>회원: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([fmt_krw(v) for v in gs['매출']], gs['주문건수'], gs['주문회원수'])))
+    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>회원: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']], gs['주문건수'], gs['주문회원수'])))
     fig.update_layout(height=max(420,len(gs)*35+140),margin=dict(l=140,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("#### 요일 · 시간대별 주문 매출 히트맵")
@@ -606,7 +607,7 @@ with tab3:
     st.markdown("#### 상품별 매출 TOP 20 (파레토 차트)")
     top20 = pa.head(20).copy(); ttl = pa['매출'].sum(); top20['누적비중'] = (top20['매출'].cumsum()/ttl*100).round(1)
     fig = make_subplots(specs=[[{"secondary_y":True}]])
-    fig.add_trace(go.Bar(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>',customdata=list(zip(top20['상품명'],[fmt_krw(v) for v in top20['매출']]))),secondary_y=False)
+    fig.add_trace(go.Bar(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['매출'],name='매출액',marker_color='#3366CC',opacity=0.8,hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>',customdata=list(zip(top20['상품명'],[f"{v:,.0f}원" for v in top20['매출']]))),secondary_y=False)
     fig.add_trace(go.Scatter(x=[f"{i+1}. {n[:16]}" for i,n in enumerate(top20['상품명'])],y=top20['누적비중'],name='누적 비중',line=dict(color='#E8853D',width=3),mode='lines+markers',marker=dict(size=7),hovertemplate='%{customdata}<br>누적 비중: %{y:.1f}%<extra></extra>',customdata=top20['상품명'].tolist()),secondary_y=True)
     tvals3, ttexts3 = krw_tickvals(top20['매출'])
     fig.update_layout(height=540,margin=dict(l=80,r=60,t=50,b=150),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=12)),xaxis=dict(tickangle=45,tickfont=dict(size=9)))
@@ -628,7 +629,7 @@ with tab3:
         td = filtered[filtered['상품명'].isin(sel)].groupby(['주문월','상품명'])['판매합계금액'].sum().reset_index(); td['주문월_kr'] = ym_series_kr(td['주문월'])
         fig = px.line(td,x='주문월_kr',y='판매합계금액',color='상품명',markers=True,color_discrete_sequence=COLORS)
         for tr in fig.data:
-            tr.customdata = [fmt_krw(v) for v in tr.y]; tr.hovertemplate = '%{x}<br>' + (tr.name[:20]+'...' if len(tr.name)>20 else tr.name) + '<br>매출: %{customdata}<extra></extra>'
+            tr.customdata = [f"{v:,.0f}원" for v in tr.y]; tr.hovertemplate = '%{x}<br>' + (tr.name[:20]+'...' if len(tr.name)>20 else tr.name) + '<br>매출: %{customdata}<extra></extra>'
             if len(tr.name) > 22: tr.name = tr.name[:22]+'...'
         fig.update_layout(height=480,margin=dict(l=70,r=30,t=30,b=120),legend=dict(orientation="h",yanchor="top",y=-0.15,x=0,font=dict(size=10)),xaxis=dict(title='',tickfont=dict(size=12)),yaxis=dict(title='매출액',tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
@@ -714,6 +715,148 @@ with tab4:
         fig=go.Figure(data=go.Heatmap(z=zv,x=mc,y=[f"{to_ym_kr(r['코호트'])} ({r['크기']}처)" for _,r in rdf.iterrows()],colorscale=[[0,'#F0F2F5'],[0.3,'#A8D5A2'],[1,'#27AE60']],text=[[f'{v:.1f}%' if v>0 else '-' for v in row] for row in zv],texttemplate='%{text}',textfont=dict(size=10),hovertemplate='%{y}<br>%{x}: %{z:.1f}%<extra></extra>'))
         fig.update_layout(height=max(400,len(rd)*32+140),margin=dict(l=190,r=20,t=20,b=50),yaxis=dict(tickfont=dict(size=10),autorange="reversed"),xaxis=dict(tickfont=dict(size=11)))
         st.plotly_chart(fig, use_container_width=True)
+        # --- 휴면/활성 회원 분석 ---
+    st.markdown("#### 휴면 · 활성 회원 분석")
+    st.markdown("""
+    <div style='background:#f8fafc;border-radius:10px;padding:12px 20px;margin-bottom:16px;border:1px solid #e2e8f0;font-size:0.85rem;color:#475569;'>
+    🟢 <b>활성</b> 최근 3개월 이내 주문 &nbsp;|&nbsp;
+    🟡 <b>단기휴면</b> 3~6개월 &nbsp;|&nbsp;
+    🟠 <b>중기휴면</b> 6~12개월 &nbsp;|&nbsp;
+    🔴 <b>장기휴면</b> 12개월 이상 &nbsp;|&nbsp;
+    ⚪ <b>미구매</b> 가입 후 주문 없음
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 기준일 (가장 최근 주문일 기준)
+    base_date = orders['주문일'].max()
+
+    # 회원별 마지막 주문일
+    last_order = orders.groupby('주문자 ID')['주문일'].max().reset_index()
+    last_order.columns = ['아이디', '마지막주문일']
+
+    # 전체 회원 기준으로 merge
+    dormant_df = members.copy()
+    dormant_df = dormant_df.merge(last_order, on='아이디', how='left')
+
+    # 추천인 정보 merge
+    ref_info = referrals_df.groupby('피추천인 사업자 번호').first()[['추천인']].reset_index()
+    ref_info.columns = ['사업자번호', '추천인']
+    dormant_df['사업자번호'] = dormant_df['사업자번호'].astype(str).str.replace('-','').str.strip()
+    ref_info['사업자번호'] = ref_info['사업자번호'].astype(str).str.replace('-','').str.strip()
+    dormant_df = dormant_df.merge(ref_info, on='사업자번호', how='left')
+    dormant_df['추천인'] = dormant_df['추천인'].fillna('-')
+
+    # 휴면경과일 계산
+    dormant_df['휴면경과일'] = (base_date - dormant_df['마지막주문일']).dt.days
+
+    # 활성 구간 분류
+    def classify_status(row):
+        if pd.isna(row['마지막주문일']):
+            return '미구매'
+        days = row['휴면경과일']
+        if days <= 90:
+            return '활성'
+        elif days <= 180:
+            return '단기휴면'
+        elif days <= 365:
+            return '중기휴면'
+        else:
+            return '장기휴면'
+
+    dormant_df['활성구분'] = dormant_df.apply(classify_status, axis=1)
+    dormant_df['마지막주문일'] = dormant_df['마지막주문일'].dt.strftime('%Y-%m-%d')
+    dormant_df['가입일'] = dormant_df['가입일'].dt.strftime('%Y-%m-%d')
+
+    status_order = ['활성', '단기휴면', '중기휴면', '장기휴면', '미구매']
+    status_colors = {
+        '활성': '#27AE60',
+        '단기휴면': '#F1C40F',
+        '중기휴면': '#E8853D',
+        '장기휴면': '#E74C3C',
+        '미구매': '#BDC3C7'
+    }
+
+    status_counts = dormant_df['활성구분'].value_counts().reindex(status_order).fillna(0).reset_index()
+    status_counts.columns = ['구분', '수']
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("##### 회원 활성 현황")
+        fig = make_donut(
+            status_counts, '구분', '수',
+            colors=[status_colors[s] for s in status_counts['구분']],
+            value_label='회원수', unit='처'
+        )
+        fig.update_layout(height=450)
+        fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(len(dormant_df))}처"
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c2:
+        st.markdown("##### 구간별 회원 수")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=status_counts['구분'], y=status_counts['수'],
+            marker_color=[status_colors[s] for s in status_counts['구분']],
+            text=[fmt_num(v) for v in status_counts['수']],
+            textposition='outside', textfont=dict(size=12),
+            hovertemplate='%{x}: %{y:,}처<extra></extra>'
+        ))
+        fig.update_layout(
+            height=450, showlegend=False,
+            margin=dict(l=60, r=30, t=30, b=40),
+            xaxis=dict(title='', tickfont=dict(size=12),
+                categoryorder='array', categoryarray=status_order),
+            yaxis=dict(title='회원 수 (처)', tickfont=dict(size=11))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # --- 휴면 회원 테이블 + 엑셀 다운로드 ---
+    st.markdown("##### 회원 목록")
+    col_filter, col_type, col_grade = st.columns(3)
+    with col_filter:
+        status_filter = st.multiselect(
+            "활성 구분 필터", status_order, default=[], placeholder="전체", key="dormant_status_filter"
+        )
+    with col_type:
+        dormant_type_opts = sorted(dormant_df['회원타입'].dropna().unique().tolist())
+        dormant_type = st.multiselect("회원타입", dormant_type_opts, default=[], placeholder="전체", key="dormant_type_filter")
+    with col_grade:
+        dormant_grade_opts = sorted(dormant_df['회원등급'].dropna().unique().tolist())
+        dormant_grade = st.multiselect("회원등급", dormant_grade_opts, default=[], placeholder="전체", key="dormant_grade_filter")
+
+    # 표시 컬럼
+    display_cols = ['추천인', '상호명', '아이디', '휴대폰', '주소', '가입일',
+                    '회원타입', '회원등급', '마지막주문일', '휴면경과일', 'SMS 수신동의', '활성구분']
+    exist_cols = [c for c in display_cols if c in dormant_df.columns]
+
+    tbl = dormant_df[exist_cols].copy()
+    if status_filter:
+        tbl = tbl[tbl['활성구분'].isin(status_filter)]
+    if dormant_type:
+        tbl = tbl[tbl['회원타입'].isin(dormant_type)]
+    if dormant_grade:
+        tbl = tbl[tbl['회원등급'].isin(dormant_grade)]
+
+    tbl = tbl.sort_values('휴면경과일', ascending=False, na_position='last').reset_index(drop=True)
+
+    st.markdown(f"**{len(tbl):,}건**")
+
+    # 엑셀 다운로드
+    def to_excel(df):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='휴면회원분석')
+        return output.getvalue()
+
+    excel_data = to_excel(tbl)
+    st.download_button(
+        label="📥 엑셀 다운로드",
+        data=excel_data,
+        file_name=f"휴면회원분석_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    st.dataframe(tbl, use_container_width=True, height=500)
 
 # ============================================================
 # Tab 5. 추천인 분석
@@ -859,7 +1002,7 @@ with tab7:
             text=[fmt_krw_short(abs(v)) for v in wf_values],
             textposition='outside', textfont=dict(size=12),
             hovertemplate='%{x}<br>금액: %{customdata}<extra></extra>',
-            customdata=[fmt_krw(abs(v)) for v in wf_values]
+            customdata=[f"{abs(v):,.0f}원" for v in wf_values]
         ))
         wf_tvals, wf_ttexts = krw_tickvals(pd.Series([abs(v) for v in wf_values]))
         fig.update_layout(height=480, margin=dict(l=80, r=30, t=50, b=60),
@@ -884,7 +1027,7 @@ with tab7:
                 x=bw_monthly['연월_kr'], y=bw_monthly[col_name], name=name,
                 marker_color=color, opacity=0.85,
                 hovertemplate='%{x}<br>' + name + ': %{customdata}<extra></extra>',
-                customdata=[fmt_krw(v) for v in bw_monthly[col_name]]
+                customdata=[f"{v:,.0f}원" for v in bw_monthly[col_name]]
             ), secondary_y=False)
         fig.add_trace(go.Scatter(
             x=bw_monthly['연월_kr'], y=bw_monthly['영업이익률'], name='영업이익률',
@@ -915,28 +1058,41 @@ with tab7:
         ch_pnl['영업이익률'] = np.where(ch_pnl['매출액'] != 0, ch_pnl['영업이익'] / ch_pnl['매출액'] * 100, 0)
         ch_pnl = ch_pnl.sort_values('매출액', ascending=True)
 
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig = go.Figure()
+
         fig.add_trace(go.Bar(
             x=ch_pnl['매출액'], y=ch_pnl['채널'], name='매출액', orientation='h',
             marker_color='#3366CC', opacity=0.8,
-            text=[fmt_krw_short(v) for v in ch_pnl['매출액']], textposition='outside', textfont=dict(size=10),
-            hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
-            customdata=[fmt_krw(v) for v in ch_pnl['매출액']]
-        ), secondary_y=False)
-        fig.add_trace(go.Scatter(
-            x=ch_pnl['영업이익률'], y=ch_pnl['채널'], name='영업이익률', mode='markers+text',
-            marker=dict(color='#E74C3C', size=12, symbol='diamond'),
-            text=[f"{v:.1f}%" for v in ch_pnl['영업이익률']], textposition='middle right', textfont=dict(size=10, color='#E74C3C'),
-            hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
-            xaxis='x2'
-        ), secondary_y=False)
+            text=[fmt_krw_short(v) for v in ch_pnl['매출액']],
+            textposition='outside', textfont=dict(size=10),
+            hovertemplate='%{y}<br>매출액: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(
+                [f"{v:,.0f}원" for v in ch_pnl['매출액']],
+                [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
+            ))
+        ))
+
+        fig.add_trace(go.Bar(
+            x=ch_pnl['영업이익'], y=ch_pnl['채널'], name='영업이익', orientation='h',
+            marker_color='#E8853D', opacity=0.8,
+            text=[fmt_krw_short(v) for v in ch_pnl['영업이익']],
+            textposition='outside', textfont=dict(size=10),
+            hovertemplate='%{y}<br>영업이익: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(
+                [f"{v:,.0f}원" for v in ch_pnl['영업이익']],
+                [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
+            ))
+        ))
+
         ch_tvals, ch_ttexts = krw_tickvals(ch_pnl['매출액'])
         fig.update_layout(
-            height=max(450, len(ch_pnl) * 38 + 140),
-            margin=dict(l=130, r=80, t=30, b=40),
+            height=max(450, len(ch_pnl) * 50 + 140),
+            barmode='group',
+            margin=dict(l=130, r=100, t=30, b=40),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-            xaxis=dict(title='매출액', tickvals=ch_tvals, ticktext=ch_ttexts, tickfont=dict(size=11), side='bottom'),
-            xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
+            xaxis=dict(
+                title='금액', tickvals=ch_tvals, ticktext=ch_ttexts, tickfont=dict(size=11)
+            ),
             yaxis=dict(title='', tickfont=dict(size=11))
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -984,7 +1140,7 @@ with tab7:
                     x=sga_monthly['연월_kr'], y=sga_monthly[col_name], name=col_name,
                     marker_color=color,
                     hovertemplate='%{x}<br>' + col_name + ': %{customdata}<extra></extra>',
-                    customdata=[fmt_krw(v) for v in sga_monthly[col_name]]
+                    customdata=[f"{v:,.0f}원" for v in sga_monthly[col_name]]
                 ))
             sga_tvals, sga_ttexts = krw_tickvals(sga_monthly[['광고선전비','운반비','판매수수료','판촉비','기타판관비']].sum(axis=1))
             fig.update_layout(height=480, barmode='stack',
@@ -996,10 +1152,13 @@ with tab7:
 
         # --- 차트 5: 제품계층구조별 수익성 분석 (서브탭) ---
         st.markdown("#### 제품계층구조별 수익성 분석")
+        prod_ch_opts = sorted(bw['채널'].unique().tolist())
+        sel_prod_ch = st.multiselect("채널 필터", prod_ch_opts, default=[], placeholder="전체 (선택 안 하면 전체 채널)", key="bw_prod_channel")
+        bw_prod = bw[bw['채널'].isin(sel_prod_ch)] if sel_prod_ch else bw
+
         prod_sub1, prod_sub2, prod_sub3 = st.tabs(["대분류", "중분류", "소분류"])
 
         def render_product_pnl(df, group_col, tab_key):
-            """제품계층구조별 손익 차트 + 테이블 렌더링"""
             pnl = df.groupby(group_col).agg(
                 매출액=('I.매출액(FI기준)', 'sum'),
                 매출총이익=('III.매출총이익', 'sum'),
@@ -1009,33 +1168,43 @@ with tab7:
             pnl['영업이익률'] = np.where(pnl['매출액'] != 0, pnl['영업이익'] / pnl['매출액'] * 100, 0)
             pnl = pnl.sort_values('매출액', ascending=True)
 
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig = go.Figure()
+
             fig.add_trace(go.Bar(
                 x=pnl['매출액'], y=pnl[group_col], name='매출액', orientation='h',
                 marker_color='#3366CC', opacity=0.8,
-                text=[fmt_krw_short(v) for v in pnl['매출액']], textposition='outside', textfont=dict(size=10),
-                hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
-                customdata=[fmt_krw(v) for v in pnl['매출액']]
-            ), secondary_y=False)
-            fig.add_trace(go.Scatter(
-                x=pnl['영업이익률'], y=pnl[group_col], name='영업이익률', mode='markers+text',
-                marker=dict(color='#E74C3C', size=10, symbol='diamond'),
-                text=[f"{v:.1f}%" for v in pnl['영업이익률']], textposition='middle right', textfont=dict(size=10, color='#E74C3C'),
-                hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
-                xaxis='x2'
-            ), secondary_y=False)
+                text=[fmt_krw_short(v) for v in pnl['매출액']],
+                textposition='outside', textfont=dict(size=10),
+                hovertemplate='%{y}<br>매출액: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+                customdata=list(zip(
+                    [f"{v:,.0f}원" for v in pnl['매출액']],
+                    [f"{v:.1f}%" for v in pnl['영업이익률']]
+                ))
+            ))
+
+            fig.add_trace(go.Bar(
+                x=pnl['영업이익'], y=pnl[group_col], name='영업이익', orientation='h',
+                marker_color='#E8853D', opacity=0.8,
+                text=[fmt_krw_short(v) for v in pnl['영업이익']],
+                textposition='outside', textfont=dict(size=10),
+                hovertemplate='%{y}<br>영업이익: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+                customdata=list(zip(
+                    [f"{v:,.0f}원" for v in pnl['영업이익']],
+                    [f"{v:.1f}%" for v in pnl['영업이익률']]
+                ))
+            ))
+
             pnl_tvals, pnl_ttexts = krw_tickvals(pnl['매출액'])
             fig.update_layout(
-                height=max(420, len(pnl) * 30 + 140),
-                margin=dict(l=180, r=80, t=30, b=40),
+                height=max(420, len(pnl) * 50 + 140),
+                barmode='group',
+                margin=dict(l=180, r=100, t=30, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-                xaxis=dict(title='매출액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
-                xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
+                xaxis=dict(title='금액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
                 yaxis=dict(title='', tickfont=dict(size=10))
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # 테이블
             tbl = pnl.sort_values('매출액', ascending=False).reset_index(drop=True)
             search_key = f"prod_search_{tab_key}"
             ps = st.text_input(f"🔍 {group_col} 검색", key=search_key)
@@ -1047,20 +1216,18 @@ with tab7:
             }), use_container_width=True, height=400)
 
         with prod_sub1:
-            render_product_pnl(bw, '제품계층구조(대)', 'large')
+            render_product_pnl(bw_prod, '제품계층구조(대)', 'large')
 
         with prod_sub2:
-            # 대분류 필터 연동
-            sel_large = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_mid_filter")
-            bw_mid = bw if sel_large == "전체" else bw[bw['제품계층구조(대)'] == sel_large]
+            sel_large = st.selectbox("대분류 선택", ["전체"] + sorted(bw_prod['제품계층구조(대)'].unique().tolist()), key="bw_mid_filter")
+            bw_mid = bw_prod if sel_large == "전체" else bw_prod[bw_prod['제품계층구조(대)'] == sel_large]
             render_product_pnl(bw_mid, '제품계층구조(중)', 'medium')
 
         with prod_sub3:
-            # 대분류 + 중분류 필터 연동
             c1, c2 = st.columns(2)
             with c1:
-                sel_large2 = st.selectbox("대분류 선택", ["전체"] + sorted(bw['제품계층구조(대)'].unique().tolist()), key="bw_small_filter_l")
-            bw_small = bw if sel_large2 == "전체" else bw[bw['제품계층구조(대)'] == sel_large2]
+                sel_large2 = st.selectbox("대분류 선택", ["전체"] + sorted(bw_prod['제품계층구조(대)'].unique().tolist()), key="bw_small_filter_l")
+            bw_small = bw_prod if sel_large2 == "전체" else bw_prod[bw_prod['제품계층구조(대)'] == sel_large2]
             with c2:
                 mid_opts = sorted(bw_small['제품계층구조(중)'].unique().tolist())
                 sel_mid = st.selectbox("중분류 선택", ["전체"] + mid_opts, key="bw_small_filter_m")
@@ -1164,14 +1331,16 @@ with tab8:
 
         with c2:
             st.markdown("#### 매칭 현황")
+            has_revenue = match_df[match_df['총매출'] > 0]['아이디'].nunique() if not match_df.empty else 0
+            no_revenue = match_df[match_df['총매출'] == 0]['아이디'].nunique() if not match_df.empty else 0
             status_df = pd.DataFrame({
-                '구분': ['확정 매칭', '후보 매칭', '미매칭'],
-                '수': [confirmed, candidate, total_clinics - matched_count]
+                '구분': ['매출 발생', '매출 미발생(휴면)', '미가입'],
+                '수': [has_revenue, no_revenue, total_clinics - matched_count]
             })
             status_df = status_df[status_df['수'] > 0]
-            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#F39C12', '#BDC3C7'])
+            fig = make_donut(status_df, '구분', '수', colors=['#27AE60', '#E8853D', '#BDC3C7'], value_label='기관수', unit='곳')
             fig.update_layout(height=450)
-            fig.layout.annotations[0].text = f"<b>전체</b><br>{fmt_num(total_clinics)}곳"
+            fig.layout.annotations[0].text = f"<b>매칭기관</b><br>{fmt_num(matched_count)}곳"
             st.plotly_chart(fig, use_container_width=True, key="pilot_match_donut")
 
         # --- 지역별 분포 ---
@@ -1223,7 +1392,7 @@ with tab8:
                     orientation='h', marker_color=bar_colors, showlegend=False,
                     text=[fmt_krw_short(v) for v in top_dedup['총매출']], textposition='outside', textfont=dict(size=10),
                     hovertemplate='%{y}<br>매출: %{customdata[0]}<br>사업유형: %{customdata[1]}<extra></extra>',
-                    customdata=list(zip([fmt_krw(v) for v in top_dedup['총매출']], top_dedup['사업유형목록']))
+                    customdata=list(zip([f"{v:,.0f}원" for v in top_dedup['총매출']], top_dedup['사업유형목록']))
                 ))
                 top_tvals, top_ttexts = krw_tickvals(top_dedup['총매출'])
                 for label, color in [('만성질환관리','#3366CC'),('방문진료','#E8853D'),('한의방문진료','#27AE60'),('만성질환관리/방문진료','#9B59B6'),('만성질환관리/한의방문진료','#1ABC9C')]:
