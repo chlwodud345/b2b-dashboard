@@ -738,6 +738,9 @@ with tab4:
     dormant_df = members.copy()
     dormant_df = dormant_df.merge(last_order, on='아이디', how='left')
 
+    # 임시 확인용
+    st.write(referrals_df.columns.tolist())
+
     # 추천인 정보 merge
     ref_info = referrals_df.groupby('피추천인 사업자 번호').first()[['추천인']].reset_index()
     ref_info.columns = ['사업자번호', '추천인']
