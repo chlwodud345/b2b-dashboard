@@ -1012,7 +1012,6 @@ with tab7:
         prod_sub1, prod_sub2, prod_sub3 = st.tabs(["대분류", "중분류", "소분류"])
 
         def render_product_pnl(df, group_col, tab_key):
-            """제품계층구조별 손익 차트 + 테이블 렌더링"""
             pnl = df.groupby(group_col).agg(
                 매출액=('I.매출액(FI기준)', 'sum'),
                 매출총이익=('III.매출총이익', 'sum'),
@@ -1022,33 +1021,43 @@ with tab7:
             pnl['영업이익률'] = np.where(pnl['매출액'] != 0, pnl['영업이익'] / pnl['매출액'] * 100, 0)
             pnl = pnl.sort_values('매출액', ascending=True)
 
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            fig = go.Figure()
+
             fig.add_trace(go.Bar(
                 x=pnl['매출액'], y=pnl[group_col], name='매출액', orientation='h',
                 marker_color='#3366CC', opacity=0.8,
-                text=[fmt_krw_short(v) for v in pnl['매출액']], textposition='outside', textfont=dict(size=10),
-                hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
-                customdata=[f"{v:,.0f}원" for v in pnl['매출액']]
-            ), secondary_y=False)
-            fig.add_trace(go.Scatter(
-                x=pnl['영업이익률'], y=pnl[group_col], name='영업이익률', mode='markers+text',
-                marker=dict(color='#E74C3C', size=10, symbol='diamond'),
-                text=[f"{v:.1f}%" for v in pnl['영업이익률']], textposition='middle right', textfont=dict(size=10, color='#E74C3C'),
-                hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
-                xaxis='x2'
-            ), secondary_y=False)
+                text=[fmt_krw_short(v) for v in pnl['매출액']],
+                textposition='outside', textfont=dict(size=10),
+                hovertemplate='%{y}<br>매출액: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+                customdata=list(zip(
+                    [f"{v:,.0f}원" for v in pnl['매출액']],
+                    [f"{v:.1f}%" for v in pnl['영업이익률']]
+                ))
+            ))
+
+            fig.add_trace(go.Bar(
+                x=pnl['영업이익'], y=pnl[group_col], name='영업이익', orientation='h',
+                marker_color='#E8853D', opacity=0.8,
+                text=[fmt_krw_short(v) for v in pnl['영업이익']],
+                textposition='outside', textfont=dict(size=10),
+                hovertemplate='%{y}<br>영업이익: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+                customdata=list(zip(
+                    [f"{v:,.0f}원" for v in pnl['영업이익']],
+                    [f"{v:.1f}%" for v in pnl['영업이익률']]
+                ))
+            ))
+
             pnl_tvals, pnl_ttexts = krw_tickvals(pnl['매출액'])
             fig.update_layout(
-                height=max(420, len(pnl) * 30 + 140),
-                margin=dict(l=180, r=80, t=30, b=40),
+                height=max(420, len(pnl) * 50 + 140),
+                barmode='group',
+                margin=dict(l=180, r=100, t=30, b=40),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
-                xaxis=dict(title='매출액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
-                xaxis2=dict(title='영업이익률 (%)', tickfont=dict(size=11), side='top', overlaying='x', ticksuffix='%'),
+                xaxis=dict(title='금액', tickvals=pnl_tvals, ticktext=pnl_ttexts, tickfont=dict(size=11)),
                 yaxis=dict(title='', tickfont=dict(size=10))
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # 테이블
             tbl = pnl.sort_values('매출액', ascending=False).reset_index(drop=True)
             search_key = f"prod_search_{tab_key}"
             ps = st.text_input(f"🔍 {group_col} 검색", key=search_key)
