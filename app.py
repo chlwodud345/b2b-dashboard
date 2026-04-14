@@ -917,7 +917,6 @@ with tab7:
 
         fig = go.Figure()
 
-        # 매출액 bar (좌측 x축)
         fig.add_trace(go.Bar(
             x=ch_pnl['매출액'], y=ch_pnl['채널'], name='매출액', orientation='h',
             marker_color='#3366CC', opacity=0.8,
@@ -927,33 +926,29 @@ with tab7:
             customdata=list(zip(
                 [fmt_krw(v) for v in ch_pnl['매출액']],
                 [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
-            )),
-            xaxis='x'
+            ))
         ))
 
-        # 영업이익률 bar (우측 x축)
         fig.add_trace(go.Bar(
-            x=ch_pnl['영업이익률'], y=ch_pnl['채널'], name='영업이익률', orientation='h',
-            marker_color='#E74C3C', opacity=0.75,
-            text=[f"{v:.1f}%" for v in ch_pnl['영업이익률']],
-            textposition='outside', textfont=dict(size=10, color='#E74C3C'),
-            hovertemplate='%{y}<br>영업이익률: %{x:.1f}%<extra></extra>',
-            xaxis='x2'
+            x=ch_pnl['영업이익'], y=ch_pnl['채널'], name='영업이익', orientation='h',
+            marker_color='#E8853D', opacity=0.8,
+            text=[fmt_krw_short(v) for v in ch_pnl['영업이익']],
+            textposition='outside', textfont=dict(size=10),
+            hovertemplate='%{y}<br>영업이익: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
+            customdata=list(zip(
+                [fmt_krw(v) for v in ch_pnl['영업이익']],
+                [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
+            ))
         ))
 
         ch_tvals, ch_ttexts = krw_tickvals(ch_pnl['매출액'])
         fig.update_layout(
             height=max(450, len(ch_pnl) * 50 + 140),
-            barmode='overlay',
-            margin=dict(l=130, r=100, t=50, b=40),
+            barmode='group',
+            margin=dict(l=130, r=100, t=30, b=40),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
             xaxis=dict(
-                title='매출액', tickvals=ch_tvals, ticktext=ch_ttexts,
-                tickfont=dict(size=11), side='bottom'
-            ),
-            xaxis2=dict(
-                title='영업이익률 (%)', tickfont=dict(size=11),
-                side='top', overlaying='x', ticksuffix='%'
+                title='금액', tickvals=ch_tvals, ticktext=ch_ttexts, tickfont=dict(size=11)
             ),
             yaxis=dict(title='', tickfont=dict(size=11))
         )
