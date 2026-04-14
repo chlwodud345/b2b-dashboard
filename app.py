@@ -563,7 +563,7 @@ with tab1:
     st.markdown("#### 일별 매출 추이")
     daily = filtered.groupby('주문일자')['판매합계금액'].sum().reset_index(); daily.columns = ['날짜','매출']
     fig = px.area(daily,x='날짜',y='매출',color_discrete_sequence=['#3366CC'])
-    fig.update_tracescustomdata=list(zip(daily['날짜'].apply(to_date_kr),[f"{v:,.0f}원" for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
+    fig.update_traces(customdata=list(zip(daily['날짜'].apply(to_date_kr),[f"{v:,.0f}원" for v in daily['매출']])),hovertemplate='%{customdata[0]}<br>매출: %{customdata[1]}<extra></extra>')
     tvals2, ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),title_font=dict(size=13),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11),title_font=dict(size=13)))
     st.plotly_chart(fig, use_container_width=True)
