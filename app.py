@@ -859,7 +859,7 @@ with tab7:
             text=[fmt_krw_short(abs(v)) for v in wf_values],
             textposition='outside', textfont=dict(size=12),
             hovertemplate='%{x}<br>금액: %{customdata}<extra></extra>',
-            customdata=[fmt_krw(abs(v)) for v in wf_values]
+            customdata=[f"{abs(v):,.0f}원" for v in wf_values]
         ))
         wf_tvals, wf_ttexts = krw_tickvals(pd.Series([abs(v) for v in wf_values]))
         fig.update_layout(height=480, margin=dict(l=80, r=30, t=50, b=60),
@@ -884,7 +884,7 @@ with tab7:
                 x=bw_monthly['연월_kr'], y=bw_monthly[col_name], name=name,
                 marker_color=color, opacity=0.85,
                 hovertemplate='%{x}<br>' + name + ': %{customdata}<extra></extra>',
-                customdata=[fmt_krw(v) for v in bw_monthly[col_name]]
+                customdata=[f"{v:,.0f}원" for v in bw_monthly[col_name]]
             ), secondary_y=False)
         fig.add_trace(go.Scatter(
             x=bw_monthly['연월_kr'], y=bw_monthly['영업이익률'], name='영업이익률',
@@ -924,7 +924,7 @@ with tab7:
             textposition='outside', textfont=dict(size=10),
             hovertemplate='%{y}<br>매출액: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
             customdata=list(zip(
-                [fmt_krw(v) for v in ch_pnl['매출액']],
+                [f"{v:,.0f}원" for v in ch_pnl['매출액']],
                 [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
             ))
         ))
@@ -936,7 +936,7 @@ with tab7:
             textposition='outside', textfont=dict(size=10),
             hovertemplate='%{y}<br>영업이익: %{customdata[0]}<br>영업이익률: %{customdata[1]}<extra></extra>',
             customdata=list(zip(
-                [fmt_krw(v) for v in ch_pnl['영업이익']],
+                [f"{v:,.0f}원" for v in ch_pnl['영업이익']],
                 [f"{v:.1f}%" for v in ch_pnl['영업이익률']]
             ))
         ))
@@ -997,7 +997,7 @@ with tab7:
                     x=sga_monthly['연월_kr'], y=sga_monthly[col_name], name=col_name,
                     marker_color=color,
                     hovertemplate='%{x}<br>' + col_name + ': %{customdata}<extra></extra>',
-                    customdata=[fmt_krw(v) for v in sga_monthly[col_name]]
+                    customdata=[f"{v:,.0f}원" for v in sga_monthly[col_name]]
                 ))
             sga_tvals, sga_ttexts = krw_tickvals(sga_monthly[['광고선전비','운반비','판매수수료','판촉비','기타판관비']].sum(axis=1))
             fig.update_layout(height=480, barmode='stack',
@@ -1028,7 +1028,7 @@ with tab7:
                 marker_color='#3366CC', opacity=0.8,
                 text=[fmt_krw_short(v) for v in pnl['매출액']], textposition='outside', textfont=dict(size=10),
                 hovertemplate='%{y}<br>매출: %{customdata}<extra></extra>',
-                customdata=[fmt_krw(v) for v in pnl['매출액']]
+                customdata=[f"{v:,.0f}원" for v in pnl['매출액']]
             ), secondary_y=False)
             fig.add_trace(go.Scatter(
                 x=pnl['영업이익률'], y=pnl[group_col], name='영업이익률', mode='markers+text',
