@@ -767,7 +767,7 @@ with tab4:
     status_order = ['활성', '단기휴면', '중기휴면', '장기휴면', '미구매']
     status_colors = {
         '활성': '#27AE60',
-        '단기휴면': '#F1C40F',
+        '단기휴면': '#F39C12',
         '중기휴면': '#E8853D',
         '장기휴면': '#E74C3C',
         '미구매': '#BDC3C7'
@@ -811,15 +811,17 @@ with tab4:
     st.markdown("##### 회원 목록")
     col_filter, col_type, col_grade = st.columns(3)
     with col_filter:
-        status_filter = st.multiselect(
-            "활성 구분 필터", status_order, default=[], placeholder="전체", key="dormant_status_filter"
+        status_filter = st.selectbox(
+            "활성 구분 필터",
+            ["전체"] + status_order,
+            key="dormant_status_filter"
         )
     with col_type:
-        dormant_type_opts = sorted(dormant_df['회원타입'].dropna().unique().tolist())
-        dormant_type = st.multiselect("회원타입", dormant_type_opts, default=[], placeholder="전체", key="dormant_type_filter")
+        dormant_type_opts = ["전체"] + sorted(dormant_df['회원타입'].dropna().unique().tolist())
+        dormant_type = st.selectbox("회원타입", dormant_type_opts, key="dormant_type_filter")
     with col_grade:
-        dormant_grade_opts = sorted(dormant_df['회원등급'].dropna().unique().tolist())
-        dormant_grade = st.multiselect("회원등급", dormant_grade_opts, default=[], placeholder="전체", key="dormant_grade_filter")
+        dormant_grade_opts = ["전체"] + sorted(dormant_df['회원등급'].dropna().unique().tolist())
+        dormant_grade = st.selectbox("회원등급", dormant_grade_opts, key="dormant_grade_filter")
 
     # 표시 컬럼
     display_cols = ['추천인', '상호명', '아이디', '휴대폰', '주소', '가입일',
@@ -827,12 +829,12 @@ with tab4:
     exist_cols = [c for c in display_cols if c in dormant_df.columns]
 
     tbl = dormant_df[exist_cols].copy()
-    if status_filter:
-        tbl = tbl[tbl['활성구분'].isin(status_filter)]
-    if dormant_type:
-        tbl = tbl[tbl['회원타입'].isin(dormant_type)]
-    if dormant_grade:
-        tbl = tbl[tbl['회원등급'].isin(dormant_grade)]
+    if status_filter != "전체":
+        tbl = tbl[tbl['활성구분'] == status_filter]
+    if dormant_type != "전체":
+        tbl = tbl[tbl['회원타입'] == dormant_type]
+    if dormant_grade != "전체":
+        tbl = tbl[tbl['회원등급'] == dormant_grade]
 
     tbl = tbl.sort_values('휴면경과일', ascending=False, na_position='last').reset_index(drop=True)
 
