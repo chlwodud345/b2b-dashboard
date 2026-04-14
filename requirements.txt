@@ -4,3 +4,4 @@ plotly
 openpyxl
 requests
 gdown
+streamlit-sortables
