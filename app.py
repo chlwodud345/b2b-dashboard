@@ -744,7 +744,10 @@ with tab4:
     dormant_df['사업자번호'] = dormant_df['사업자번호'].astype(str).str.replace('-','').str.strip()
     ref_info['사업자번호'] = ref_info['사업자번호'].astype(str).str.replace('-','').str.strip()
     dormant_df = dormant_df.merge(ref_info, on='사업자번호', how='left')
-    dormant_df['추천인'] = dormant_df['추천인'].fillna('-')
+    if '추천인' in dormant_df.columns:
+        dormant_df['추천인'] = dormant_df['추천인'].fillna('-')
+    else:
+        dormant_df['추천인'] = '-'
 
     # 휴면경과일 계산
     dormant_df['휴면경과일'] = (base_date - dormant_df['마지막주문일']).dt.days
