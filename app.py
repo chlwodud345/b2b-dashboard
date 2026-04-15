@@ -1444,26 +1444,34 @@ with tab9:
                 original_dataframe = st.dataframe
 
                 def make_plotly(sfx):
+                    call_count = [0]
                     def _plotly(fig, *a, **kw):
-                        kw['key'] = f"custom_{sfx}_{kw.get('key','')}"
+                        call_count[0] += 1
+                        kw['key'] = f"custom_{sfx}_{call_count[0]}"
                         return original_plotly(fig, *a, **kw)
                     return _plotly
 
                 def make_text_input(sfx):
+                    call_count = [0]
                     def _ti(label, *a, **kw):
-                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        call_count[0] += 1
+                        kw['key'] = f"custom_{sfx}_ti_{call_count[0]}"
                         return original_text_input(label, *a, **kw)
                     return _ti
 
                 def make_multiselect(sfx):
+                    call_count = [0]
                     def _ms(label, *a, **kw):
-                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        call_count[0] += 1
+                        kw['key'] = f"custom_{sfx}_ms_{call_count[0]}"
                         return original_multiselect(label, *a, **kw)
                     return _ms
 
                 def make_selectbox(sfx):
+                    call_count = [0]
                     def _sb(label, *a, **kw):
-                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        call_count[0] += 1
+                        kw['key'] = f"custom_{sfx}_sb_{call_count[0]}"
                         return original_selectbox(label, *a, **kw)
                     return _sb
 
