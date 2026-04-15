@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 import io
 import requests
 
-st.set_page_config(page_title="B2B몰 대시보드 구축 프로젝트5", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="대상웰라이프 B2B몰 대시보드", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
 COLORS = ['#3366CC','#E8853D','#27AE60','#9B59B6','#E74C3C','#1ABC9C','#F39C12','#2980B9','#8E44AD','#D35400']
 HOVER_FONT = dict(font=dict(size=16, family='Noto Sans KR'))
