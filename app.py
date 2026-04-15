@@ -551,6 +551,9 @@ def render_cohort_heatmap(kp=""):
 
 def render_dormant_analysis(kp=""):
     st.markdown("#### 휴면 · 활성 회원 분석")
+    st.markdown("""<div style='background:#f8fafc;border-radius:10px;padding:12px 20px;margin-bottom:16px;border:1px solid #e2e8f0;font-size:0.85rem;color:#475569;'>
+    🟢 <b>활성</b> 최근 3개월 이내 주문 &nbsp;|&nbsp; 🟡 <b>단기휴면</b> 3~6개월 &nbsp;|&nbsp; 🟠 <b>중기휴면</b> 6~12개월 &nbsp;|&nbsp; 🔴 <b>장기휴면</b> 12개월 이상 &nbsp;|&nbsp; ⚪ <b>미구매</b> 가입 후 주문 없음
+    </div>""", unsafe_allow_html=True)
     base_date=orders['주문일'].max()
     last_order=orders.groupby('주문자 ID')['주문일'].max().reset_index(); last_order.columns=['아이디','마지막주문일']
     dormant_df=members.copy(); dormant_df=dormant_df.merge(last_order,on='아이디',how='left')
@@ -568,10 +571,12 @@ def render_dormant_analysis(kp=""):
     status_counts=dormant_df['활성구분'].value_counts().reindex(status_order).fillna(0).reset_index(); status_counts.columns=['구분','수']
     c1,c2=st.columns(2)
     with c1:
+        st.markdown("##### 회원 활성 현황")
         fig=make_donut(status_counts,'구분','수',colors=[status_colors[s] for s in status_counts['구분']],value_label='회원수',unit='처')
         fig.update_layout(height=450); fig.layout.annotations[0].text=f"<b>전체</b><br>{fmt_num(len(dormant_df))}처"
         st.plotly_chart(fig, use_container_width=True, key=_k(kp,"dormant_donut"))
     with c2:
+        st.markdown("##### 구간별 회원 수")
         fig=go.Figure()
         fig.add_trace(go.Bar(x=status_counts['구분'],y=status_counts['수'],marker_color=[status_colors[s] for s in status_counts['구분']],text=[fmt_num(v) for v in status_counts['수']],textposition='outside',textfont=dict(size=12),hovertemplate='%{x}: %{y:,}처<extra></extra>'))
         fig.update_layout(height=450,showlegend=False,margin=dict(l=60,r=30,t=30,b=40),xaxis=dict(title='',tickfont=dict(size=12),categoryorder='array',categoryarray=status_order),yaxis=dict(title='회원 수 (처)',tickfont=dict(size=11)))
@@ -910,10 +915,6 @@ with tab4:
     with cl: render_first_order_days()
     with cr: render_order_count_dist()
     render_cohort_heatmap()
-    st.markdown("#### 휴면 · 활성 회원 분석")
-    st.markdown("""<div style='background:#f8fafc;border-radius:10px;padding:12px 20px;margin-bottom:16px;border:1px solid #e2e8f0;font-size:0.85rem;color:#475569;'>
-    🟢 <b>활성</b> 최근 3개월 이내 주문 &nbsp;|&nbsp; 🟡 <b>단기휴면</b> 3~6개월 &nbsp;|&nbsp; 🟠 <b>중기휴면</b> 6~12개월 &nbsp;|&nbsp; 🔴 <b>장기휴면</b> 12개월 이상 &nbsp;|&nbsp; ⚪ <b>미구매</b> 가입 후 주문 없음
-    </div>""",unsafe_allow_html=True)
     render_dormant_analysis()
     # 휴면 회원 목록 테이블 (Tab4 전용)
     base_date=orders['주문일'].max()
