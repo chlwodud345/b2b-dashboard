@@ -398,7 +398,7 @@ def download_from_gdrive(file_id):
     os.remove(tmp)
     return io.BytesIO(content)
 
-@st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...")
+@st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...", max_entries=1)
 def load_from_gdrive():
     fb = download_from_gdrive(GDRIVE_FILE_ID)
     o = pd.read_excel(fb, sheet_name='주문내역', header=1, engine='openpyxl'); fb.seek(0)
@@ -1430,12 +1430,58 @@ with tab9:
                 st.session_state.custom_step = 'sort'
                 st.rerun()
         st.markdown(f"## 📊 커스텀 대시보드  <span style='font-size:0.9rem;color:#94a3b8;'>({len(st.session_state.custom_order)}개 차트)</span>", unsafe_allow_html=True)
-        for label in st.session_state.custom_order:
+
+        import unittest.mock as mock
+
+        for idx, label in enumerate(st.session_state.custom_order):
             cid = label_to_cid.get(label)
             if cid and cid in CHART_REGISTRY:
-                with st.container():
-                    CHART_REGISTRY[cid]["fn"]()
-                st.markdown("---")
+                # plotly_chart key 충돌 방지: 원본 함수를 패치하여 key에 suffix 추가
+                original_plotly = st.plotly_chart
+                original_text_input = st.text_input
+                original_multiselect = st.multiselect
+                original_selectbox = st.selectbox
+                original_dataframe = st.dataframe
+
+                def make_plotly(sfx):
+                    def _plotly(fig, *a, **kw):
+                        kw['key'] = f"custom_{sfx}_{kw.get('key','')}"
+                        return original_plotly(fig, *a, **kw)
+                    return _plotly
+
+                def make_text_input(sfx):
+                    def _ti(label, *a, **kw):
+                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        return original_text_input(label, *a, **kw)
+                    return _ti
+
+                def make_multiselect(sfx):
+                    def _ms(label, *a, **kw):
+                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        return original_multiselect(label, *a, **kw)
+                    return _ms
+
+                def make_selectbox(sfx):
+                    def _sb(label, *a, **kw):
+                        kw['key'] = f"custom_{sfx}_{kw.get('key', label)}"
+                        return original_selectbox(label, *a, **kw)
+                    return _sb
+
+                st.plotly_chart = make_plotly(f"{cid}_{idx}")
+                st.text_input = make_text_input(f"{cid}_{idx}")
+                st.multiselect = make_multiselect(f"{cid}_{idx}")
+                st.selectbox = make_selectbox(f"{cid}_{idx}")
+
+                try:
+                    with st.container():
+                        CHART_REGISTRY[cid]["fn"]()
+                    st.markdown("---")
+                finally:
+                    # 반드시 원복
+                    st.plotly_chart = original_plotly
+                    st.text_input = original_text_input
+                    st.multiselect = original_multiselect
+                    st.selectbox = original_selectbox
 
 # ============================================================
 # 푸터
