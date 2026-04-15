@@ -550,7 +550,6 @@ def render_cohort_heatmap(kp=""):
         st.plotly_chart(fig, use_container_width=True, key=_k(kp,"cohort"))
 
 def render_dormant_analysis(kp=""):
-    st.markdown("#### 휴면 · 활성 회원 분석")
     base_date=orders['주문일'].max()
     last_order=orders.groupby('주문자 ID')['주문일'].max().reset_index(); last_order.columns=['아이디','마지막주문일']
     dormant_df=members.copy(); dormant_df=dormant_df.merge(last_order,on='아이디',how='left')
