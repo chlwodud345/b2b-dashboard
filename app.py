@@ -112,6 +112,16 @@ def process_data(orders, members, referrals_df):
             if addr.startswith(r): return r
         return '기타'
     orders['지역'] = orders['주소(주문자)'].apply(extract_region)
+    orders['구매확정일'] = pd.to_datetime(orders['구매확정일'], errors='coerce')
+    def calc_settlement_month(dt):
+        if pd.isna(dt): return None
+        if dt.day >= 26:
+            # 다음달로 이월
+            if dt.month == 12: return f"{dt.year+1}-01"
+            else: return f"{dt.year}-{str(dt.month+1).zfill(2)}"
+        else:
+            return f"{dt.year}-{str(dt.month).zfill(2)}"
+    orders['정산월'] = orders['구매확정일'].apply(calc_settlement_month)
     members['가입일'] = pd.to_datetime(members['가입일'], errors='coerce')
     members['가입월'] = members['가입일'].dt.to_period('M').astype(str)
     members['사업자번호'] = members['사업자번호'].astype(str).str.replace('-','').str.strip()
@@ -973,6 +983,105 @@ with tab5:
     sr=st.text_input("🔍 추천인 검색",key="ref_search")
     if sr: dr=dr[dr.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
     st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
+    # ── 대리점 판매수수료 집계 ──
+    st.markdown("---")
+    st.markdown("#### 🏪 대리점 판매수수료 집계")
+    st.caption("구매확정일 기준 · 전월 26일~당월 25일 · 대리점 회원 추천인의 피추천인 매출 × 10%")
+
+    # 대리점 추천인 목록
+    dealer_refs = referrals_df[referrals_df['회원그룹'] == '대리점 회원'].copy()
+    if dealer_refs.empty:
+        st.info("대리점 회원 추천인 데이터가 없습니다.")
+    else:
+        # 피추천인 사업자번호 → 아이디 매핑
+        b2u = members.set_index('사업자번호')['아이디'].to_dict()
+        dealer_refs['피추천인_아이디'] = dealer_refs['피추천인 사업자 번호'].map(b2u)
+
+        # 구매확정일 + 정산월 있는 주문만
+        orders_settled = orders[orders['정산월'].notna()].copy()
+
+        # 대리점 추천인별 피추천인 아이디 목록
+        dealer_map = dealer_refs.dropna(subset=['피추천인_아이디']).groupby('추천인')['피추천인_아이디'].apply(set).to_dict()
+
+        if not dealer_map:
+            st.info("매칭된 피추천인 데이터가 없습니다.")
+        else:
+            rows = []
+            for dealer, buyer_ids in dealer_map.items():
+                df_d = orders_settled[orders_settled['주문자 ID'].isin(buyer_ids)]
+                if df_d.empty: continue
+                for month, grp in df_d.groupby('정산월'):
+                    sales = grp['판매합계금액'].sum()
+                    rows.append({'대리점': dealer, '정산월': month, '피추천인매출': sales, '판매수수료': sales * 0.1})
+
+            if not rows:
+                st.info("집계된 데이터가 없습니다.")
+            else:
+                comm_df = pd.DataFrame(rows).sort_values(['정산월','대리점']).reset_index(drop=True)
+                comm_df['정산월_kr'] = ym_series_kr(comm_df['정산월'])
+
+                # 차트: 월별 피추천인 매출 + 판매수수료
+                monthly_comm = comm_df.groupby('정산월').agg(
+                    피추천인매출=('피추천인매출','sum'),
+                    판매수수료=('판매수수료','sum')
+                ).reset_index()
+                monthly_comm['정산월_kr'] = ym_series_kr(monthly_comm['정산월'])
+
+                fig = make_subplots(specs=[[{"secondary_y": True}]])
+                fig.add_trace(go.Bar(
+                    x=monthly_comm['정산월_kr'], y=monthly_comm['피추천인매출'],
+                    name='피추천인 매출', marker_color='#3366CC', opacity=0.8,
+                    hovertemplate='%{x}<br>피추천인 매출: %{customdata}<extra></extra>',
+                    customdata=[f"{v:,.0f}원" for v in monthly_comm['피추천인매출']]
+                ), secondary_y=False)
+                fig.add_trace(go.Scatter(
+                    x=monthly_comm['정산월_kr'], y=monthly_comm['판매수수료'],
+                    name='판매수수료(10%)', line=dict(color='#E74C3C', width=3),
+                    mode='lines+markers+text', marker=dict(size=8),
+                    text=[fmt_krw_short(v) for v in monthly_comm['판매수수료']],
+                    textposition='top center', textfont=dict(size=11, color='#E74C3C'),
+                    hovertemplate='%{x}<br>판매수수료: %{customdata}<extra></extra>',
+                    customdata=[f"{v:,.0f}원" for v in monthly_comm['판매수수료']]
+                ), secondary_y=True)
+                tvals, ttexts = krw_tickvals(monthly_comm['피추천인매출'])
+                tvals2, ttexts2 = krw_tickvals(monthly_comm['판매수수료'])
+                fig.update_layout(height=480, margin=dict(l=80,r=60,t=50,b=70),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=12)),
+                    xaxis=dict(tickfont=dict(size=12)))
+                fig.update_yaxes(title_text="피추천인 매출", tickvals=tvals, ticktext=ttexts, tickfont=dict(size=11), secondary_y=False)
+                fig.update_yaxes(title_text="판매수수료", tickvals=tvals2, ticktext=ttexts2, tickfont=dict(size=11), secondary_y=True)
+                st.plotly_chart(fig, use_container_width=True, key="dealer_comm_chart")
+
+                # 테이블: 대리점별 × 정산월
+                st.markdown("##### 대리점별 × 정산월 상세")
+                pivot_sales = comm_df.pivot_table(index='대리점', columns='정산월', values='피추천인매출', aggfunc='sum', fill_value=0)
+                pivot_comm = comm_df.pivot_table(index='대리점', columns='정산월', values='판매수수료', aggfunc='sum', fill_value=0)
+
+                # 두 테이블을 멀티인덱스로 합치기
+                pivot_sales.columns = pd.MultiIndex.from_tuples([(c,'피추천인매출') for c in pivot_sales.columns])
+                pivot_comm.columns = pd.MultiIndex.from_tuples([(c,'판매수수료') for c in pivot_comm.columns])
+                combined = pd.concat([pivot_sales, pivot_comm], axis=1).sort_index(axis=1)
+
+                # 합계 행 추가
+                combined.loc['합계'] = combined.sum()
+
+                st.dataframe(
+                    combined.style.format('{:,.0f}원'),
+                    use_container_width=True, height=max(300, (len(combined)+1)*35+60)
+                )
+
+                # 엑셀 다운로드
+                def comm_to_excel(df):
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df.to_excel(writer, sheet_name='대리점판매수수료')
+                    return output.getvalue()
+                st.download_button(
+                    label="📥 엑셀 다운로드",
+                    data=comm_to_excel(comm_df[['대리점','정산월','피추천인매출','판매수수료']]),
+                    file_name=f"대리점판매수수료_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
 # ============================================================
 # Tab 6. 케어포 멤버십
