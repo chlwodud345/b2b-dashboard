@@ -672,6 +672,7 @@ def render_dealer_commission(kp=""):
         xaxis=dict(tickfont=dict(size=12)))
     fig.update_yaxes(title_text="피추천인 매출", tickvals=tvals, ticktext=ttexts, tickfont=dict(size=11), secondary_y=False)
     fig.update_yaxes(title_text="판매수수료", tickvals=tvals2, ticktext=ttexts2, tickfont=dict(size=11), secondary_y=True)
+    st.markdown("##### 월별 피추천인 매출 · 판매수수료 추이")
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"dealer_chart"))
 
     st.markdown("##### 대리점별 × 정산월 상세")
@@ -919,7 +920,7 @@ CHART_REGISTRY = {
     "C31":{"name":"📊 월별 판관비 구성 추이","tab":"손익 분석","fn":render_sga_monthly_trend},
     "C32":{"name":"🏷️ 제품계층구조별 수익성 분석","tab":"손익 분석","fn":render_product_pnl_hierarchy},
     "C33":{"name":"🔩 자재별 손익 현황 테이블","tab":"손익 분석","fn":render_material_pnl_table},
-    "C34":{"name":"🏪 대리점 판매수수료 집계","tab":"추천인 분석","fn":render_dealer_commission},
+    "C34":{"name":"🏪 대리점 피추천인 매출 및 판매수수료 집계","tab":"추천인 분석","fn":render_dealer_commission},
 }
 
 # ============================================================
