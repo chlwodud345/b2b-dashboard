@@ -616,7 +616,7 @@ def _build_referral_data():
     return pd.DataFrame(ra.values())[['추천인','유형','추천인코드','피추천인수','피추천인매출']]
 
 def render_dealer_commission(kp=""):
-    st.markdown("#### 🏪 대리점 판매수수료 집계")
+    st.markdown("#### 대리점 피추천인 매출 및 판매수수료 집계")
     st.caption("구매확정일자 기준 · 전월 26일~당월 25일 · 상품별 수수료율 적용")
 
     if dealer_raw.empty:
