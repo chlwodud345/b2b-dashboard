@@ -643,7 +643,12 @@ def render_dealer_commission(kp=""):
     dr['수수료금액'] = dr['판매금액_num'] * dr['수수료율_num']
     dr['정산월_key'] = dr['정산연도'].astype(str).str.zfill(4) + '-' + dr['정산월'].astype(str).str.zfill(2)
 
-    monthly = dr.groupby('정산월_key').agg(
+    dealer_opts = sorted(dr['추천인명(상호명)'].unique().tolist())
+    sel_dealers = st.multiselect("대리점 필터", dealer_opts, default=[], 
+        placeholder="전체 (선택 안 하면 전체)", key=_k(kp,"dealer_filter") if kp else "dealer_filter_main")
+    dr_chart = dr[dr['추천인명(상호명)'].isin(sel_dealers)] if sel_dealers else dr
+
+    monthly = dr_chart.groupby('정산월_key').agg(
         피추천인매출=('판매금액_num','sum'),
         판매수수료=('수수료금액','sum')
     ).reset_index().sort_values('정산월_key')
@@ -676,7 +681,7 @@ def render_dealer_commission(kp=""):
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"dealer_chart"))
 
     st.markdown("##### 대리점별 × 정산월 상세")
-    dealer_monthly = dr.groupby(['추천인명(상호명)','정산월_key']).agg(
+    dealer_monthly = dr_chart.groupby(['추천인명(상호명)','정산월_key']).agg(
         피추천인매출=('판매금액_num','sum'),
         판매수수료=('수수료금액','sum')
     ).reset_index()
