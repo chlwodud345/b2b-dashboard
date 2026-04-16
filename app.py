@@ -327,14 +327,19 @@ def load_from_gdrive():
     m = pd.read_excel(fb, sheet_name='회원정보', header=1, engine='openpyxl'); fb.seek(0)
     r = pd.read_excel(fb, sheet_name='추천인', header=1, engine='openpyxl'); fb.seek(0)
     try:
+        dealer_raw = pd.read_excel(fb, sheet_name='대리점 피추천인 주문내역', header=1, engine='openpyxl')
+    except Exception:
+        dealer_raw = pd.DataFrame()
+    fb.seek(0)
+    try:
         bw_raw = pd.read_excel(fb, sheet_name='BW', header=0, engine='openpyxl', dtype={'달력 연도/월':str})
         bw = process_bw(bw_raw)
     except Exception: bw = pd.DataFrame()
     orders, members, referrals_df = process_data(o, m, r)
-    return orders, members, referrals_df, bw
+    return orders, members, referrals_df, bw, dealer_raw
 
 try:
-    orders, members, referrals_df, bw_data = load_from_gdrive()
+    orders, members, referrals_df, bw_data, dealer_raw = load_from_gdrive()
     sidebar_msg = f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건"
     if len(bw_data) > 0: sidebar_msg += f"\n- BW손익: {len(bw_data):,}건"
     st.sidebar.success(sidebar_msg)
@@ -986,102 +991,114 @@ with tab5:
     # ── 대리점 판매수수료 집계 ──
     st.markdown("---")
     st.markdown("#### 🏪 대리점 판매수수료 집계")
-    st.caption("구매확정일 기준 · 전월 26일~당월 25일 · 대리점 회원 추천인의 피추천인 매출 × 10%")
+    st.caption("구매확정일자 기준 · 전월 26일~당월 25일 · 상품별 수수료율 적용")
 
-    # 대리점 추천인 목록
-    dealer_refs = referrals_df[referrals_df['회원그룹'] == '대리점 회원'].copy()
-    if dealer_refs.empty:
-        st.info("대리점 회원 추천인 데이터가 없습니다.")
+    if dealer_raw.empty:
+        st.info("대리점 피추천인 주문내역 데이터가 없습니다.")
     else:
-        # 피추천인 사업자번호 → 아이디 매핑
-        b2u = members.set_index('사업자번호')['아이디'].to_dict()
-        dealer_refs['피추천인_아이디'] = dealer_refs['피추천인 사업자 번호'].map(b2u)
+        # 전처리
+        dr = dealer_raw.copy()
+        dr.columns = [c.replace('\n','').strip() for c in dr.columns]
 
-        # 구매확정일 + 정산월 있는 주문만
-        orders_settled = orders[orders['정산월'].notna()].copy()
+        # 수수료율 숫자 변환 (예: '10%' → 0.1)
+        def parse_rate(val):
+            if pd.isna(val): return 0
+            s = str(val).replace('%','').strip()
+            try: return float(s) / 100
+            except: return 0
 
-        # 대리점 추천인별 피추천인 아이디 목록
-        dealer_map = dealer_refs.dropna(subset=['피추천인_아이디']).groupby('추천인')['피추천인_아이디'].apply(set).to_dict()
+        # 금액 숫자 변환 (예: '39,000' → 39000)
+        def parse_amount(val):
+            if pd.isna(val): return 0
+            if isinstance(val, (int, float)): return float(val)
+            try: return float(str(val).replace(',','').strip())
+            except: return 0
 
-        if not dealer_map:
-            st.info("매칭된 피추천인 데이터가 없습니다.")
-        else:
-            rows = []
-            for dealer, buyer_ids in dealer_map.items():
-                df_d = orders_settled[orders_settled['주문자 ID'].isin(buyer_ids)]
-                if df_d.empty: continue
-                for month, grp in df_d.groupby('정산월'):
-                    sales = grp['판매합계금액'].sum()
-                    rows.append({'대리점': dealer, '정산월': month, '피추천인매출': sales, '판매수수료': sales * 0.1})
+        dr['판매금액_num'] = dr['판매금액'].apply(parse_amount)
+        dr['수수료율_num'] = dr['상품 수수료율'].apply(parse_rate)
+        dr['수수료금액'] = dr['판매금액_num'] * dr['수수료율_num']
+        dr['정산월_key'] = dr['정산연도'].astype(str).str.zfill(4) + '-' + dr['정산월'].astype(str).str.zfill(2)
 
-            if not rows:
-                st.info("집계된 데이터가 없습니다.")
-            else:
-                comm_df = pd.DataFrame(rows).sort_values(['정산월','대리점']).reset_index(drop=True)
-                comm_df['정산월_kr'] = ym_series_kr(comm_df['정산월'])
+        # 월별 시계열 집계
+        monthly = dr.groupby('정산월_key').agg(
+            피추천인매출=('판매금액_num', 'sum'),
+            판매수수료=('수수료금액', 'sum')
+        ).reset_index().sort_values('정산월_key')
+        monthly['정산월_kr'] = ym_series_kr(monthly['정산월_key'])
 
-                # 차트: 월별 피추천인 매출 + 판매수수료
-                monthly_comm = comm_df.groupby('정산월').agg(
-                    피추천인매출=('피추천인매출','sum'),
-                    판매수수료=('판매수수료','sum')
-                ).reset_index()
-                monthly_comm['정산월_kr'] = ym_series_kr(monthly_comm['정산월'])
+        # 차트: 월별 피추천인 매출 + 판매수수료
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(
+            x=monthly['정산월_kr'], y=monthly['피추천인매출'],
+            name='피추천인 매출', marker_color='#3366CC', opacity=0.8,
+            hovertemplate='%{x}<br>피추천인 매출: %{customdata}<extra></extra>',
+            customdata=[f"{v:,.0f}원" for v in monthly['피추천인매출']]
+        ), secondary_y=False)
+        fig.add_trace(go.Scatter(
+            x=monthly['정산월_kr'], y=monthly['판매수수료'],
+            name='판매수수료', line=dict(color='#E74C3C', width=3),
+            mode='lines+markers+text', marker=dict(size=8),
+            text=[fmt_krw_short(v) for v in monthly['판매수수료']],
+            textposition='top center', textfont=dict(size=11, color='#E74C3C'),
+            hovertemplate='%{x}<br>판매수수료: %{customdata}<extra></extra>',
+            customdata=[f"{v:,.0f}원" for v in monthly['판매수수료']]
+        ), secondary_y=True)
+        tvals, ttexts = krw_tickvals(monthly['피추천인매출'])
+        tvals2, ttexts2 = krw_tickvals(monthly['판매수수료'])
+        fig.update_layout(height=480, margin=dict(l=80,r=60,t=50,b=70),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=12)),
+            xaxis=dict(tickfont=dict(size=12)))
+        fig.update_yaxes(title_text="피추천인 매출", tickvals=tvals, ticktext=ttexts,
+            tickfont=dict(size=11), secondary_y=False)
+        fig.update_yaxes(title_text="판매수수료", tickvals=tvals2, ticktext=ttexts2,
+            tickfont=dict(size=11), secondary_y=True)
+        st.plotly_chart(fig, use_container_width=True, key="dealer_comm_chart")
 
-                fig = make_subplots(specs=[[{"secondary_y": True}]])
-                fig.add_trace(go.Bar(
-                    x=monthly_comm['정산월_kr'], y=monthly_comm['피추천인매출'],
-                    name='피추천인 매출', marker_color='#3366CC', opacity=0.8,
-                    hovertemplate='%{x}<br>피추천인 매출: %{customdata}<extra></extra>',
-                    customdata=[f"{v:,.0f}원" for v in monthly_comm['피추천인매출']]
-                ), secondary_y=False)
-                fig.add_trace(go.Scatter(
-                    x=monthly_comm['정산월_kr'], y=monthly_comm['판매수수료'],
-                    name='판매수수료(10%)', line=dict(color='#E74C3C', width=3),
-                    mode='lines+markers+text', marker=dict(size=8),
-                    text=[fmt_krw_short(v) for v in monthly_comm['판매수수료']],
-                    textposition='top center', textfont=dict(size=11, color='#E74C3C'),
-                    hovertemplate='%{x}<br>판매수수료: %{customdata}<extra></extra>',
-                    customdata=[f"{v:,.0f}원" for v in monthly_comm['판매수수료']]
-                ), secondary_y=True)
-                tvals, ttexts = krw_tickvals(monthly_comm['피추천인매출'])
-                tvals2, ttexts2 = krw_tickvals(monthly_comm['판매수수료'])
-                fig.update_layout(height=480, margin=dict(l=80,r=60,t=50,b=70),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=12)),
-                    xaxis=dict(tickfont=dict(size=12)))
-                fig.update_yaxes(title_text="피추천인 매출", tickvals=tvals, ticktext=ttexts, tickfont=dict(size=11), secondary_y=False)
-                fig.update_yaxes(title_text="판매수수료", tickvals=tvals2, ticktext=ttexts2, tickfont=dict(size=11), secondary_y=True)
-                st.plotly_chart(fig, use_container_width=True, key="dealer_comm_chart")
+        # 테이블: 대리점별 × 정산월
+        st.markdown("##### 대리점별 × 정산월 상세")
 
-                # 테이블: 대리점별 × 정산월
-                st.markdown("##### 대리점별 × 정산월 상세")
-                pivot_sales = comm_df.pivot_table(index='대리점', columns='정산월', values='피추천인매출', aggfunc='sum', fill_value=0)
-                pivot_comm = comm_df.pivot_table(index='대리점', columns='정산월', values='판매수수료', aggfunc='sum', fill_value=0)
+        # 대리점별 × 정산월 피벗 (피추천인매출 + 판매수수료)
+        months = sorted(dr['정산월_key'].unique())
 
-                # 두 테이블을 멀티인덱스로 합치기
-                pivot_sales.columns = pd.MultiIndex.from_tuples([(c,'피추천인매출') for c in pivot_sales.columns])
-                pivot_comm.columns = pd.MultiIndex.from_tuples([(c,'판매수수료') for c in pivot_comm.columns])
-                combined = pd.concat([pivot_sales, pivot_comm], axis=1).sort_index(axis=1)
+        dealer_monthly = dr.groupby(['추천인명(상호명)', '정산월_key']).agg(
+            피추천인매출=('판매금액_num', 'sum'),
+            판매수수료=('수수료금액', 'sum')
+        ).reset_index()
 
-                # 합계 행 추가
-                combined.loc['합계'] = combined.sum()
+        pivot_sales = dealer_monthly.pivot(index='추천인명(상호명)', columns='정산월_key', values='피추천인매출').fillna(0)
+        pivot_comm = dealer_monthly.pivot(index='추천인명(상호명)', columns='정산월_key', values='판매수수료').fillna(0)
 
-                st.dataframe(
-                    combined.style.format('{:,.0f}원'),
-                    use_container_width=True, height=max(300, (len(combined)+1)*35+60)
-                )
+        # 멀티인덱스 컬럼 구성
+        pivot_sales.columns = pd.MultiIndex.from_tuples([(to_ym_kr(c), '피추천인매출') for c in pivot_sales.columns])
+        pivot_comm.columns = pd.MultiIndex.from_tuples([(to_ym_kr(c), '판매수수료') for c in pivot_comm.columns])
+        combined = pd.concat([pivot_sales, pivot_comm], axis=1).sort_index(axis=1)
 
-                # 엑셀 다운로드
-                def comm_to_excel(df):
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        df.to_excel(writer, sheet_name='대리점판매수수료')
-                    return output.getvalue()
-                st.download_button(
-                    label="📥 엑셀 다운로드",
-                    data=comm_to_excel(comm_df[['대리점','정산월','피추천인매출','판매수수료']]),
-                    file_name=f"대리점판매수수료_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+        # 합계 행
+        combined.loc['합계'] = combined.sum()
+
+        st.dataframe(
+            combined.style.format('{:,.0f}원'),
+            use_container_width=True,
+            height=max(300, (len(combined)+1)*35+60)
+        )
+
+        # 엑셀 다운로드 (원본 행 데이터)
+        dl_df = dr[['정산월_key','추천인명(상호명)','피 추천인 상호','피 추천인 사업자번호','상품명','판매금액_num','수수료율_num','수수료금액','구매확정일자']].copy()
+        dl_df.columns = ['정산월','대리점','피추천인상호','피추천인사업자번호','상품명','판매금액','수수료율','수수료금액','구매확정일자']
+        dl_df = dl_df.sort_values(['정산월','대리점']).reset_index(drop=True)
+
+        def comm_to_excel(df):
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='대리점판매수수료')
+            return output.getvalue()
+
+        st.download_button(
+            label="📥 엑셀 다운로드",
+            data=comm_to_excel(dl_df),
+            file_name=f"대리점판매수수료_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 # ============================================================
 # Tab 6. 케어포 멤버십
