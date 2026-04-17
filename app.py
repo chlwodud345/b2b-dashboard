@@ -615,6 +615,31 @@ def _build_referral_data():
     for n in ra: ra[n]['피추천인매출']=sum(bs.get(b2u.get(b,''),0) for b in ra[n]['biz'])
     return pd.DataFrame(ra.values())[['추천인','유형','추천인코드','피추천인수','피추천인매출']]
 
+def render_referral_count_bar(kp=""):
+    st.markdown("#### 추천인 유형별 피추천인 수")
+    rdf_local=_build_referral_data()
+    tc={'영업팀':'#3366CC','대리점':'#E8853D','케어포':'#27AE60'}
+    tr_df=rdf_local.groupby('유형')['피추천인수'].sum().reset_index()
+    fig=px.bar(tr_df,x='유형',y='피추천인수',color='유형',color_discrete_map=tc)
+    fig.update_traces(text=[fmt_num(v) for v in tr_df['피추천인수']],textposition='outside',textfont=dict(size=12),hovertemplate='%{x}: %{y:,}회원<extra></extra>')
+    fig.update_layout(height=450,showlegend=False,margin=dict(l=60,r=30,t=30,b=40))
+    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"ref_count"))
+
+def render_referral_sales_donut(kp=""):
+    st.markdown("#### 추천인 유형별 피추천인 매출")
+    rdf_local=_build_referral_data()
+    tc={'영업팀':'#3366CC','대리점':'#E8853D','케어포':'#27AE60'}
+    ts_ref=rdf_local.groupby('유형')['피추천인매출'].sum().reset_index()
+    fig=make_donut(ts_ref,'유형','피추천인매출',colors=[tc.get(t,'#999') for t in ts_ref['유형']])
+    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"ref_donut"))
+
+def render_referral_table(kp=""):
+    st.markdown("#### 추천인별 현황")
+    rdf_local=_build_referral_data().sort_values('피추천인매출',ascending=False).reset_index(drop=True)
+    sr=st.text_input("🔍 추천인 검색",key=f"{kp}_ref_table_search" if kp else "ref_table_search_main")
+    if sr: rdf_local=rdf_local[rdf_local.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
+    st.dataframe(rdf_local.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
+
 def render_dealer_commission(kp=""):
     st.markdown("#### 대리점 피추천인 매출 및 판매수수료 집계")
     st.caption("구매확정일자 기준 · 전월 26일~당월 25일 · 상품별 수수료율 적용")
@@ -694,30 +719,120 @@ def render_dealer_commission(kp=""):
     st.dataframe(combined.style.format('{:,.0f}원'), use_container_width=True,
         height=550)
 
-def render_referral_count_bar(kp=""):
-    st.markdown("#### 추천인 유형별 피추천인 수")
-    rdf_local=_build_referral_data()
-    tc={'영업팀':'#3366CC','대리점':'#E8853D','케어포':'#27AE60'}
-    tr_df=rdf_local.groupby('유형')['피추천인수'].sum().reset_index()
-    fig=px.bar(tr_df,x='유형',y='피추천인수',color='유형',color_discrete_map=tc)
-    fig.update_traces(text=[fmt_num(v) for v in tr_df['피추천인수']],textposition='outside',textfont=dict(size=12),hovertemplate='%{x}: %{y:,}회원<extra></extra>')
-    fig.update_layout(height=450,showlegend=False,margin=dict(l=60,r=30,t=30,b=40))
-    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"ref_count"))
+def render_dealer_commission_forecast(kp=""):
+    st.markdown("#### 🔮 대리점 판매수수료 예측 (당월)")
+    st.caption("주문내역 기준 · 구매확정일 있는 주문 + 미확정 주문(주문일+14일 예상) · 수수료율 10% 고정")
 
-def render_referral_sales_donut(kp=""):
-    st.markdown("#### 추천인 유형별 피추천인 매출")
-    rdf_local=_build_referral_data()
-    tc={'영업팀':'#3366CC','대리점':'#E8853D','케어포':'#27AE60'}
-    ts_ref=rdf_local.groupby('유형')['피추천인매출'].sum().reset_index()
-    fig=make_donut(ts_ref,'유형','피추천인매출',colors=[tc.get(t,'#999') for t in ts_ref['유형']])
-    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"ref_donut"))
+    # 1단계: 대리점 추천인 목록
+    dealer_refs = referrals_df[referrals_df['회원그룹'] == '대리점 회원'].copy()
+    if dealer_refs.empty:
+        st.info("대리점 회원 추천인 데이터가 없습니다.")
+        return
 
-def render_referral_table(kp=""):
-    st.markdown("#### 추천인별 현황")
-    rdf_local=_build_referral_data().sort_values('피추천인매출',ascending=False).reset_index(drop=True)
-    sr=st.text_input("🔍 추천인 검색",key=f"{kp}_ref_table_search" if kp else "ref_table_search_main")
-    if sr: rdf_local=rdf_local[rdf_local.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
-    st.dataframe(rdf_local.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
+    # 2단계: 피추천인 사업자번호 → 주문자 ID
+    b2u = members.set_index('사업자번호')['아이디'].to_dict()
+    dealer_refs['피추천인_아이디'] = dealer_refs['피추천인 사업자 번호'].map(b2u)
+    dealer_map = dealer_refs.dropna(subset=['피추천인_아이디']).groupby('추천인')['피추천인_아이디'].apply(set).to_dict()
+
+    if not dealer_map:
+        st.info("매칭된 피추천인 데이터가 없습니다.")
+        return
+
+    # 전체 피추천인 아이디 목록
+    all_buyer_ids = set().union(*dealer_map.values())
+
+    # 3단계: 주문 필터링
+    # 구매확정일 있는 주문 → 정산월 그대로
+    # 구매확정일 없는 주문 → 주문일 + 14일로 예상 정산월 계산
+    orders_target = orders[orders['주문자 ID'].isin(all_buyer_ids)].copy()
+
+    def calc_settlement_month(row):
+        if pd.notna(row.get('구매확정일')) and row['정산월'] is not None:
+            return row['정산월']
+        # 미확정: 주문일 + 14일
+        expected = row['주문일'] + pd.Timedelta(days=14)
+        if pd.isna(expected): return None
+        if expected.day >= 26:
+            if expected.month == 12: return f"{expected.year+1}-01"
+            else: return f"{expected.year}-{str(expected.month+1).zfill(2)}"
+        else:
+            return f"{expected.year}-{str(expected.month).zfill(2)}"
+
+    orders_target['예상정산월'] = orders_target.apply(calc_settlement_month, axis=1)
+
+    # 당월 계산
+    today = pd.Timestamp.now()
+    if today.day >= 26:
+        if today.month == 12: current_month = f"{today.year+1}-01"
+        else: current_month = f"{today.year}-{str(today.month+1).zfill(2)}"
+    else:
+        current_month = f"{today.year}-{str(today.month).zfill(2)}"
+
+    # 당월 주문만 필터
+    orders_curr = orders_target[orders_target['예상정산월'] == current_month].copy()
+
+    if orders_curr.empty:
+        st.info(f"{to_ym_kr(current_month)} 예측 데이터가 없습니다.")
+        return
+
+    st.markdown(f"**기준 정산월: {to_ym_kr(current_month)}**")
+
+    # 확정/미확정 구분
+    orders_curr['확정여부'] = orders_curr['정산월'].apply(
+        lambda x: '확정' if x == current_month else '미확정(예측)'
+    )
+
+    # 4단계: 대리점별 집계
+    # 주문자 ID → 대리점 역매핑
+    id_to_dealer = {}
+    for dealer, buyer_ids in dealer_map.items():
+        for bid in buyer_ids:
+            id_to_dealer[bid] = dealer
+
+    orders_curr['대리점'] = orders_curr['주문자 ID'].map(id_to_dealer)
+    orders_curr = orders_curr.dropna(subset=['대리점'])
+
+    # 대리점별 × 확정여부 집계
+    summary = orders_curr.groupby(['대리점','확정여부']).agg(
+        피추천인매출=('판매합계금액','sum')
+    ).reset_index()
+    summary['판매수수료'] = summary['피추천인매출'] * 0.1
+
+    # 피벗
+    pivot = summary.pivot_table(
+        index='대리점', columns='확정여부',
+        values=['피추천인매출','판매수수료'], aggfunc='sum', fill_value=0
+    )
+    pivot.columns = [f"{b}_{a}" for a,b in pivot.columns]
+    
+    # 합계 컬럼 추가
+    if '확정_피추천인매출' not in pivot.columns: pivot['확정_피추천인매출'] = 0
+    if '미확정(예측)_피추천인매출' not in pivot.columns: pivot['미확정(예측)_피추천인매출'] = 0
+    if '확정_판매수수료' not in pivot.columns: pivot['확정_판매수수료'] = 0
+    if '미확정(예측)_판매수수료' not in pivot.columns: pivot['미확정(예측)_판매수수료'] = 0
+
+    pivot['예상총매출'] = pivot['확정_피추천인매출'] + pivot['미확정(예측)_피추천인매출']
+    pivot['예상총수수료'] = pivot['확정_판매수수료'] + pivot['미확정(예측)_판매수수료']
+    pivot = pivot.sort_values('예상총수수료', ascending=False)
+    pivot.loc['합계'] = pivot.sum()
+
+    # KPI
+    total_confirmed = pivot.loc['합계','확정_판매수수료'] if '합계' in pivot.index else 0
+    total_expected = pivot.loc['합계','미확정(예측)_판매수수료'] if '합계' in pivot.index else 0
+    total_forecast = pivot.loc['합계','예상총수수료'] if '합계' in pivot.index else 0
+
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(kpi_card("확정 수수료", fmt_krw_short(total_confirmed), "원"), unsafe_allow_html=True)
+    c2.markdown(kpi_card("예측 수수료", fmt_krw_short(total_expected), "원"), unsafe_allow_html=True)
+    c3.markdown(kpi_card("예상 합계", fmt_krw_short(total_forecast), "원"), unsafe_allow_html=True)
+
+    # 테이블
+    display_cols = ['확정_피추천인매출','확정_판매수수료','미확정(예측)_피추천인매출','미확정(예측)_판매수수료','예상총매출','예상총수수료']
+    display_cols = [c for c in display_cols if c in pivot.columns]
+    st.dataframe(
+        pivot[display_cols].style.format('{:,.0f}원'),
+        use_container_width=True, height=550
+    )
 
 def render_carefor_grade_sales(kp=""):
     st.markdown("#### 케어포 등급별 매출")
@@ -1071,6 +1186,8 @@ with tab5:
     # ── 대리점 판매수수료 집계 ──
     st.markdown("---")
     render_dealer_commission()
+    st.markdown("---")
+    render_dealer_commission_forecast()
     
 # ============================================================
 # Tab 6. 케어포 멤버십
