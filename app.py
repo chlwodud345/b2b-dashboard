@@ -692,7 +692,7 @@ def render_dealer_commission(kp=""):
     combined = pd.concat([pivot_sales, pivot_comm], axis=1).sort_index(axis=1)
     combined.loc['합계'] = combined.sum()
     st.dataframe(combined.style.format('{:,.0f}원'), use_container_width=True,
-        height=550
+        height=550)
 
 def render_referral_count_bar(kp=""):
     st.markdown("#### 추천인 유형별 피추천인 수")
