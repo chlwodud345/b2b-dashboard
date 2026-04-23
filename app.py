@@ -435,6 +435,8 @@ def render_type_monthly_sales(kp=""):
     fig = px.bar(tm_df,x='주문월_kr',y='판매합계금액',color='주문자 구분',color_discrete_sequence=COLORS)
     for tr in fig.data: tr.customdata=[f"{v:,.0f}원" for v in tr.y]; tr.hovertemplate='%{x}<br>'+tr.name+': %{customdata}<extra></extra>'
     fig.update_layout(height=480,barmode='stack',margin=dict(l=70,r=30,t=50,b=70),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)))
+    total_by_month = tm_df.groupby('주문월_kr')['판매합계금액'].sum().reset_index()
+    fig.add_trace(go.Scatter(x=total_by_month['주문월_kr'], y=total_by_month['판매합계금액'], mode='text', text=[fmt_krw_short(v) for v in total_by_month['판매합계금액']], textposition='top center', textfont=dict(size=11, color='#1e293b'), showlegend=False, hoverinfo='skip'))
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"type_monthly"))
 
 def render_grade_sales_bar(kp=""):
