@@ -621,7 +621,11 @@ def render_referral_count_bar(kp=""):
     tc={'영업팀':'#3366CC','대리점':'#E8853D','케어포':'#27AE60'}
     tr_df=rdf_local.groupby('유형')['피추천인수'].sum().reset_index()
     fig=px.bar(tr_df,x='유형',y='피추천인수',color='유형',color_discrete_map=tc)
-    fig.update_traces(text=[fmt_num(v) for v in tr_df['피추천인수']],textposition='outside',textfont=dict(size=12),hovertemplate='%{x}: %{y:,}회원<extra></extra>')
+    for i, tr in enumerate(fig.data):
+        tr.text = [fmt_num(tr_df.iloc[i]['피추천인수'])]
+        tr.textposition = 'outside'
+        tr.textfont = dict(size=12)
+        tr.hovertemplate = '%{x}: %{y:,}회원<extra></extra>'
     fig.update_layout(height=450,showlegend=False,margin=dict(l=60,r=30,t=30,b=40))
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"ref_count"))
 
