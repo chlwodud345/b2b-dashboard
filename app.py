@@ -146,7 +146,7 @@ def process_bw(bw_raw):
         s = str(name).strip(); parts = s.split(',')
         if len(parts) == 1: return '일반'
         ref_map = {'영':'영업','대':'대리점','케':'케어포'}
-        mem_map = {'의':'의료기','장':'장기요양','병':'병원','약':'약국','크':'염증성장질환','종':'종사자'}
+        mem_map = {'의':'의료기','장':'장기요양','병':'병원','약':'약국','크':'염증성장질환','종':'종사자','대': '대리점'}
         if len(parts) == 2: return ref_map.get(parts[1].strip(), parts[1].strip())
         if len(parts) == 3:
             p1, p2 = parts[1].strip(), parts[2].strip()
