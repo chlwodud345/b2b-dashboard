@@ -1010,7 +1010,8 @@ def render_material_pnl_table(kp=""):
         if isinstance(val,(int,float)) and val<0: return 'color: #E74C3C; font-weight: 600'
         return ''
     st.dataframe(mat_pnl.style.format({'매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원','매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%','판매수량':'{:,.0f}'}).map(highlight_negative,subset=['영업이익','영업이익률']),use_container_width=True,height=550)
-    def _get_hospital_members():
+    
+def _get_hospital_members():
     """병원 회원등급 기관만 필터"""
     hosp = members[members['회원등급'] == '병원'].copy()
     for col in ['병원구분','진료과']:
