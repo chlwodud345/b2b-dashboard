@@ -1292,7 +1292,7 @@ with tab5:
 # ============================================================
 with tab6:
     cfg=['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
-    co=filtered[filtered['회원 등급'].isin(cfg)]; cmb=members[members['회원타입']=='케어포']; cf_filtered=filtered_members[filtered_members['회원타입']=='케어포']
+    co=filtered[filtered['회원 등급'].isin(cfg)]; cmb=members[members['회원등급'].isin(cfg)]; cf_filtered=filtered_members[filtered_members['회원등급'].isin(cfg)]
     cgf=st.selectbox("케어포 등급",["전체"]+cfg,key="cf_grade")
     if cgf!="전체": co=co[co['회원 등급']==cgf]; cf_filtered=cf_filtered[cf_filtered['회원등급']==cgf]
     cbo=co.groupby('주문자 ID')['주문 ID'].nunique(); crp=(cbo>=2).sum(); crr=crp/len(cbo)*100 if len(cbo)>0 else 0
