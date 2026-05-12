@@ -1050,6 +1050,15 @@ def render_hospital_type_dist(kp=""):
             fig2.update_traces(text=[fmt_num(v) for v in dept['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
             fig2.update_layout(height=max(300,len(dept)*35+100),margin=dict(l=140,r=80,t=20,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
             st.plotly_chart(fig2,use_container_width=True,key=_k(kp,"hosp_dept_drill"))
+            # 월별 신규가입 추이
+            st.markdown(f"##### {sel_type} — 월별 신규가입 추이")
+            monthly = sub.groupby('가입월').size().reset_index(name='가입자수')
+            monthly['가입월_kr'] = ym_series_kr(monthly['가입월'])
+            monthly = monthly.sort_values('가입월')
+            fig3 = px.bar(monthly, x='가입월_kr', y='가입자수', color_discrete_sequence=COLORS)
+            fig3.update_traces(text=[fmt_num(v) for v in monthly['가입자수']], textposition='outside', textfont=dict(size=11), hovertemplate='%{x}: %{y:,}처<extra></extra>')
+            fig3.update_layout(height=400, margin=dict(l=60,r=30,t=30,b=70), showlegend=False, xaxis=dict(title='', tickfont=dict(size=11)), yaxis=dict(title='가입자 수 (처)', tickfont=dict(size=11)))
+            st.plotly_chart(fig3, use_container_width=True, key=_k(kp,"hosp_monthly_drill"))
 
 def render_hospital_dept_dist(kp=""):
     st.markdown("#### 진료과별 가입자 분포")
