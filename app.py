@@ -125,6 +125,9 @@ def process_data(orders, members, referrals_df):
     members['가입일'] = pd.to_datetime(members['가입일'], errors='coerce')
     members['가입월'] = members['가입일'].dt.to_period('M').astype(str)
     members['사업자번호'] = members['사업자번호'].astype(str).str.replace('-','').str.strip()
+    for col in ['병원구분','진료과']:
+        if col in members.columns:
+            members[col] = members[col].fillna('미분류').astype(str).str.strip()
     referrals_df['피추천인 사업자 번호'] = referrals_df['피추천인 사업자 번호'].astype(str).str.replace('-','').str.strip()
     return orders, members, referrals_df
 
@@ -1007,6 +1010,82 @@ def render_material_pnl_table(kp=""):
         if isinstance(val,(int,float)) and val<0: return 'color: #E74C3C; font-weight: 600'
         return ''
     st.dataframe(mat_pnl.style.format({'매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원','매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%','판매수량':'{:,.0f}'}).map(highlight_negative,subset=['영업이익','영업이익률']),use_container_width=True,height=550)
+    def _get_hospital_members():
+    """병원 회원등급 기관만 필터"""
+    hosp = members[members['회원등급'] == '병원'].copy()
+    for col in ['병원구분','진료과']:
+        if col not in hosp.columns:
+            hosp[col] = '미분류'
+    return hosp
+
+def _get_hospital_orders():
+    """병원 회원등급 기관의 주문만 필터"""
+    hosp = _get_hospital_members()
+    return orders[orders['주문자 ID'].isin(hosp['아이디'].tolist())]
+
+def render_hospital_type_dist(kp=""):
+    st.markdown("#### 병원구분별 가입자 분포")
+    hosp = _get_hospital_members()
+    gd = hosp['병원구분'].value_counts().reset_index(); gd.columns=['병원구분','수']
+    fig = px.bar(gd,x='수',y='병원구분',orientation='h',color_discrete_sequence=COLORS)
+    fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
+    fig.update_layout(height=max(350,len(gd)*40+120),margin=dict(l=120,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+    st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_type_dist"))
+
+def render_hospital_dept_dist(kp=""):
+    st.markdown("#### 진료과별 가입자 분포")
+    hosp = _get_hospital_members()
+    gd = hosp['진료과'].value_counts().reset_index(); gd.columns=['진료과','수']
+    fig = px.bar(gd,x='수',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+    fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
+    fig.update_layout(height=max(350,len(gd)*35+120),margin=dict(l=140,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+    st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_dist"))
+
+def render_hospital_cross_dist(kp=""):
+    st.markdown("#### 병원구분 × 진료과 크로스 분포")
+    hosp = _get_hospital_members()
+    cross = hosp.groupby(['병원구분','진료과']).size().reset_index(name='수')
+    pivot = cross.pivot_table(index='진료과',columns='병원구분',values='수',fill_value=0)
+    pivot['합계'] = pivot.sum(axis=1); pivot = pivot.sort_values('합계',ascending=False)
+    st.dataframe(pivot.style.format('{:,.0f}'),use_container_width=True,height=550)
+
+def render_hospital_type_sales(kp=""):
+    st.markdown("#### 병원구분별 매출")
+    hosp = _get_hospital_members()
+    hosp_orders = _get_hospital_orders()
+    id_to_type = hosp.set_index('아이디')['병원구분'].to_dict()
+    hosp_orders = hosp_orders.copy(); hosp_orders['병원구분'] = hosp_orders['주문자 ID'].map(id_to_type)
+    gs = hosp_orders.groupby('병원구분').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
+    fig = px.bar(gs,x='매출',y='병원구분',orientation='h',color_discrete_sequence=COLORS)
+    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>기관: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']],gs['주문건수'],gs['주문기관수'])))
+    fig.update_layout(height=max(350,len(gs)*40+120),margin=dict(l=120,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+    st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_type_sales"))
+
+def render_hospital_dept_sales(kp=""):
+    st.markdown("#### 진료과별 매출")
+    hosp = _get_hospital_members()
+    hosp_orders = _get_hospital_orders()
+    id_to_dept = hosp.set_index('아이디')['진료과'].to_dict()
+    hosp_orders = hosp_orders.copy(); hosp_orders['진료과'] = hosp_orders['주문자 ID'].map(id_to_dept)
+    gs = hosp_orders.groupby('진료과').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
+    fig = px.bar(gs,x='매출',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+    fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>기관: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']],gs['주문건수'],gs['주문기관수'])))
+    fig.update_layout(height=max(350,len(gs)*35+120),margin=dict(l=140,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+    st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_sales"))
+
+def render_hospital_cross_sales(kp=""):
+    st.markdown("#### 병원구분 × 진료과별 매출 크로스")
+    hosp = _get_hospital_members()
+    hosp_orders = _get_hospital_orders()
+    id_to_type = hosp.set_index('아이디')['병원구분'].to_dict()
+    id_to_dept = hosp.set_index('아이디')['진료과'].to_dict()
+    hosp_orders = hosp_orders.copy()
+    hosp_orders['병원구분'] = hosp_orders['주문자 ID'].map(id_to_type)
+    hosp_orders['진료과'] = hosp_orders['주문자 ID'].map(id_to_dept)
+    cross = hosp_orders.groupby(['진료과','병원구분'])['판매합계금액'].sum().reset_index()
+    pivot = cross.pivot_table(index='진료과',columns='병원구분',values='판매합계금액',fill_value=0)
+    pivot['합계'] = pivot.sum(axis=1); pivot = pivot.sort_values('합계',ascending=False)
+    st.dataframe(pivot.style.format('{:,.0f}원'),use_container_width=True,height=550)
 # ============================================================
 # 38개 차트 레지스트리
 # ============================================================
@@ -1045,14 +1124,21 @@ CHART_REGISTRY = {
     "C32":{"name":"🏷️ 제품계층구조별 수익성 분석","tab":"손익 분석","fn":render_product_pnl_hierarchy},
     "C33":{"name":"🔩 자재별 손익 현황 테이블","tab":"손익 분석","fn":render_material_pnl_table},
     "C34":{"name":"🏪 대리점 피추천인 매출 및 판매수수료 집계","tab":"추천인 분석","fn":render_dealer_commission},
+    "C35":{"name":"🏥 병원구분별 가입자 분포","tab":"병원 분석","fn":render_hospital_type_dist},
+    "C36":{"name":"🔬 진료과별 가입자 분포","tab":"병원 분석","fn":render_hospital_dept_dist},
+    "C37":{"name":"📊 병원구분×진료과 크로스 분포","tab":"병원 분석","fn":render_hospital_cross_dist},
+    "C39":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
+    "C39":{"name":"💊 진료과별 매출","tab":"병원 분석","fn":render_hospital_dept_sales},
+    "C40":{"name":"📋 병원구분×진료과별 매출 크로스","tab":"병원 분석","fn":render_hospital_cross_sales},
 }
 
 # ============================================================
 # 탭 구성
 # ============================================================
-tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9 = st.tabs([
+tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10 = st.tabs([
     "📋 종합 현황","💵 매출 분석","📦 상품 분석","👥 회원 분석",
-    "🔗 추천인 분석","🤝 케어포 멤버십","📈 손익 분석","🏥 일차의료 시범기관","⚙️ 커스텀 뷰"
+    "🔗 추천인 분석","🤝 케어포 멤버십","📈 손익 분석","🏥 일차의료 시범기관",
+    "🏨 병원 분석","⚙️ 커스터마이징"
 ])
 
 # ============================================================
@@ -1329,9 +1415,32 @@ with tab8:
         st.dataframe(unmatched,use_container_width=True,height=450)
 
 # ============================================================
-# Tab 9. 커스터마이징
+# Tab 9. 병원분석
 # ============================================================
 with tab9:
+    hosp = _get_hospital_members()
+    total_hosp = len(hosp)
+    ordered_hosp = hosp[hosp['아이디'].isin(orders['주문자 ID'].unique())]
+    cols = st.columns(3)
+    for col,(l,v,u) in zip(cols,[
+        ("병원 총 회원수", fmt_num(total_hosp), "처"),
+        ("주문 병원수", fmt_num(len(ordered_hosp)), "처"),
+        ("구매전환율", fmt_pct(len(ordered_hosp)/total_hosp*100 if total_hosp>0 else 0), "")
+    ]): col.markdown(kpi_card(l,v,u), unsafe_allow_html=True)
+
+    cl,cr = st.columns(2)
+    with cl: render_hospital_type_dist()
+    with cr: render_hospital_dept_dist()
+    render_hospital_cross_dist()
+    cl,cr = st.columns(2)
+    with cl: render_hospital_type_sales()
+    with cr: render_hospital_dept_sales()
+    render_hospital_cross_sales()
+
+# ============================================================
+# Tab 10. 커스터마이징
+# ============================================================
+with tab10:
     from streamlit_sortables import sort_items
     st.markdown("### ⚙️ 대시보드 커스터마이징")
     st.markdown("차트를 선택하고 **▶ 순서 조정으로 이동** 버튼을 누르세요.")
