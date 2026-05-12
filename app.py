@@ -1034,6 +1034,23 @@ def render_hospital_type_dist(kp=""):
     fig.update_layout(height=max(350,len(gd)*40+120),margin=dict(l=120,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_type_dist"))
 
+    # 병원구분 선택 → 진료과 드릴다운
+    type_opts = ['선택 안 함'] + sorted(hosp['병원구분'].unique().tolist())
+    sel_type = st.selectbox("병원구분 선택 시 진료과별 상세 표시", type_opts,
+        key=f"{kp}_hosp_drill" if kp else "hosp_drill_main")
+    if sel_type != '선택 안 함':
+        st.markdown(f"##### {sel_type} — 진료과별 가입자 분포")
+        sub = hosp[hosp['병원구분'] == sel_type]
+        dept = sub['진료과'].value_counts().reset_index(); dept.columns=['진료과','수']
+        dept = dept.sort_values('수', ascending=True)
+        if dept.empty:
+            st.info("진료과 데이터가 없습니다.")
+        else:
+            fig2 = px.bar(dept,x='수',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+            fig2.update_traces(text=[fmt_num(v) for v in dept['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
+            fig2.update_layout(height=max(300,len(dept)*35+100),margin=dict(l=140,r=80,t=20,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
+            st.plotly_chart(fig2,use_container_width=True,key=_k(kp,"hosp_dept_drill"))
+
 def render_hospital_dept_dist(kp=""):
     st.markdown("#### 진료과별 가입자 분포")
     hosp = _get_hospital_members()
@@ -1431,9 +1448,7 @@ with tab9:
         ("구매전환율", fmt_pct(len(ordered_hosp)/total_hosp*100 if total_hosp>0 else 0), "")
     ]): col.markdown(kpi_card(l,v,u), unsafe_allow_html=True)
 
-    cl,cr = st.columns(2)
-    with cl: render_hospital_type_dist()
-    with cr: render_hospital_dept_dist()
+    render_hospital_type_dist()
     render_hospital_cross_dist()
     cl,cr = st.columns(2)
     with cl: render_hospital_type_sales()
