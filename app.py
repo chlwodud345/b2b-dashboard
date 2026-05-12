@@ -1028,6 +1028,7 @@ def render_hospital_type_dist(kp=""):
     st.markdown("#### 병원구분별 가입자 분포")
     hosp = _get_hospital_members()
     gd = hosp['병원구분'].value_counts().reset_index(); gd.columns=['병원구분','수']
+    gd = gd.sort_values('수', ascending=True)
     fig = px.bar(gd,x='수',y='병원구분',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
     fig.update_layout(height=max(350,len(gd)*40+120),margin=dict(l=120,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
@@ -1037,6 +1038,7 @@ def render_hospital_dept_dist(kp=""):
     st.markdown("#### 진료과별 가입자 분포")
     hosp = _get_hospital_members()
     gd = hosp['진료과'].value_counts().reset_index(); gd.columns=['진료과','수']
+    gd = gd.sort_values('수', ascending=True)
     fig = px.bar(gd,x='수',y='진료과',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
     fig.update_layout(height=max(350,len(gd)*35+120),margin=dict(l=140,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
@@ -1128,7 +1130,7 @@ CHART_REGISTRY = {
     "C35":{"name":"🏥 병원구분별 가입자 분포","tab":"병원 분석","fn":render_hospital_type_dist},
     "C36":{"name":"🔬 진료과별 가입자 분포","tab":"병원 분석","fn":render_hospital_dept_dist},
     "C37":{"name":"📊 병원구분×진료과 크로스 분포","tab":"병원 분석","fn":render_hospital_cross_dist},
-    "C39":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
+    "C38":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
     "C39":{"name":"💊 진료과별 매출","tab":"병원 분석","fn":render_hospital_dept_sales},
     "C40":{"name":"📋 병원구분×진료과별 매출 크로스","tab":"병원 분석","fn":render_hospital_cross_sales},
 }
