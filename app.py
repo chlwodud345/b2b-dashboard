@@ -1059,7 +1059,7 @@ def render_hospital_type_dist(kp=""):
             for tr in fig3.data: tr.hovertemplate='%{x}<br>'+tr.name+': %{y:,}처<extra></extra>'
             fig3.update_layout(height=400, barmode='stack', margin=dict(l=60,r=30,t=30,b=70),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=10)),
-                xaxis=dict(title='', tickfont=dict(size=11)), yaxis=dict(title='가입자 수 (처)', tickfont=dict(size=11)))
+                xaxis=dict(title='', tickfont=dict(size=11), categoryorder='array', categoryarray=monthly['가입월_kr'].tolist()), yaxis=dict(title='가입자 수 (처)', tickfont=dict(size=11)))
             st.plotly_chart(fig3, use_container_width=True, key=_k(kp,"hosp_monthly_drill"))
 
 def render_hospital_dept_dist(kp=""):
