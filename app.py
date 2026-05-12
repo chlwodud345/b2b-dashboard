@@ -1072,14 +1072,6 @@ def render_hospital_dept_dist(kp=""):
     fig.update_layout(height=max(350,len(gd)*35+120),margin=dict(l=140,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_dist"))
 
-def render_hospital_cross_dist(kp=""):
-    st.markdown("#### 병원구분 × 진료과 크로스 분포")
-    hosp = _get_hospital_members()
-    cross = hosp.groupby(['병원구분','진료과']).size().reset_index(name='수')
-    pivot = cross.pivot_table(index='진료과',columns='병원구분',values='수',fill_value=0)
-    pivot['합계'] = pivot.sum(axis=1); pivot = pivot.sort_values('합계',ascending=False)
-    st.dataframe(pivot.style.format('{:,.0f}'),use_container_width=True,height=550)
-
 def render_hospital_type_sales(kp=""):
     st.markdown("#### 병원구분별 매출")
     hosp = _get_hospital_members()
@@ -1104,19 +1096,6 @@ def render_hospital_dept_sales(kp=""):
     fig.update_layout(height=max(350,len(gs)*35+120),margin=dict(l=140,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_sales"))
 
-def render_hospital_cross_sales(kp=""):
-    st.markdown("#### 병원구분 × 진료과별 매출 크로스")
-    hosp = _get_hospital_members()
-    hosp_orders = _get_hospital_orders()
-    id_to_type = hosp.set_index('아이디')['병원구분'].to_dict()
-    id_to_dept = hosp.set_index('아이디')['진료과'].to_dict()
-    hosp_orders = hosp_orders.copy()
-    hosp_orders['병원구분'] = hosp_orders['주문자 ID'].map(id_to_type)
-    hosp_orders['진료과'] = hosp_orders['주문자 ID'].map(id_to_dept)
-    cross = hosp_orders.groupby(['진료과','병원구분'])['판매합계금액'].sum().reset_index()
-    pivot = cross.pivot_table(index='진료과',columns='병원구분',values='판매합계금액',fill_value=0)
-    pivot['합계'] = pivot.sum(axis=1); pivot = pivot.sort_values('합계',ascending=False)
-    st.dataframe(pivot.style.format('{:,.0f}원'),use_container_width=True,height=550)
 # ============================================================
 # 38개 차트 레지스트리
 # ============================================================
@@ -1157,10 +1136,8 @@ CHART_REGISTRY = {
     "C34":{"name":"🏪 대리점 피추천인 매출 및 판매수수료 집계","tab":"추천인 분석","fn":render_dealer_commission},
     "C35":{"name":"🏥 병원구분별 가입자 분포","tab":"병원 분석","fn":render_hospital_type_dist},
     "C36":{"name":"🔬 진료과별 가입자 분포","tab":"병원 분석","fn":render_hospital_dept_dist},
-    "C37":{"name":"📊 병원구분×진료과 크로스 분포","tab":"병원 분석","fn":render_hospital_cross_dist},
-    "C38":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
-    "C39":{"name":"💊 진료과별 매출","tab":"병원 분석","fn":render_hospital_dept_sales},
-    "C40":{"name":"📋 병원구분×진료과별 매출 크로스","tab":"병원 분석","fn":render_hospital_cross_sales},
+    "C37":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
+    "C38":{"name":"💊 진료과별 매출","tab":"병원 분석","fn":render_hospital_dept_sales},
 }
 
 # ============================================================
@@ -1458,13 +1435,10 @@ with tab9:
         ("주문 병원수", fmt_num(len(ordered_hosp)), "처"),
         ("구매전환율", fmt_pct(len(ordered_hosp)/total_hosp*100 if total_hosp>0 else 0), "")
     ]): col.markdown(kpi_card(l,v,u), unsafe_allow_html=True)
-
     render_hospital_type_dist()
-    render_hospital_cross_dist()
     cl,cr = st.columns(2)
     with cl: render_hospital_type_sales()
     with cr: render_hospital_dept_sales()
-    render_hospital_cross_sales()
 
 # ============================================================
 # Tab 10. 커스터마이징
