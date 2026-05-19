@@ -125,9 +125,11 @@ def process_data(orders, members, referrals_df):
     members['가입일'] = pd.to_datetime(members['가입일'], errors='coerce')
     members['가입월'] = members['가입일'].dt.to_period('M').astype(str)
     members['사업자번호'] = members['사업자번호'].astype(str).str.replace('-','').str.strip()
-    for col in ['병원구분','진료과']:
-        if col in members.columns:
-            members[col] = members[col].fillna('미분류').astype(str).str.strip()
+    members['기관구분'] = members['기관구분'].fillna('').astype(str).str.strip() if '기관구분' in members.columns else ''
+    members['기관유형'] = members['기관유형'].fillna('').astype(str).str.strip() if '기관유형' in members.columns else ''
+    members['세그'] = members.apply(lambda r:
+       f"{r['기관구분']} {r['기관유형']}"
+       if r.get('기관구분','') and r.get('기관유형','') else '미분류', axis=1)
     referrals_df['피추천인 사업자 번호'] = referrals_df['피추천인 사업자 번호'].astype(str).str.replace('-','').str.strip()
     return orders, members, referrals_df
 
@@ -391,6 +393,426 @@ if os.path.exists(logo_path):
     st.markdown(f'<div class="main-header" style="display:flex;align-items:center;justify-content:space-between;"><div><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div><img src="data:image/png;base64,{logo_b64}" style="height:50px;object-fit:contain;"></div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
+
+# ============================================================
+# 세그먼트 집계 함수
+# ============================================================
+@st.cache_data(show_spinner="🔬 세그먼트 집계 중...")
+def _build_segment_data(_orders, _members):
+    """
+    기관구분 + 기관유형 컬럼 기준으로 세그먼트별 지표 집계.
+    미분류(공란) 세그는 제외.
+    반환: DataFrame (세그별 1행)
+    """
+    import numpy as np
+ 
+    base_date = _orders['주문일'].max()
+    seg_members = _members[_members['세그'] != '미분류'].copy()
+ 
+    # 세그 → 아이디 맵  (세그 = 기관구분 + " " + 기관유형)
+    seg_map = seg_members.set_index('아이디')['세그'].to_dict()
+    ord_ = _orders.copy()
+    ord_['세그'] = ord_['주문자 ID'].map(seg_map)
+    ord_ = ord_[ord_['세그'].notna()]
+ 
+    # ── 거래처별 기본 지표 ──
+    per_m = ord_.groupby('주문자 ID').agg(
+        총매출=('판매합계금액', 'sum'),
+        총주문건수=('주문 ID', 'nunique'),
+        첫주문일=('주문일', 'min'),
+        마지막주문일=('주문일', 'max'),
+        세그=('세그', 'first')
+    ).reset_index()
+ 
+    per_m['활동개월수'] = ((base_date - per_m['첫주문일']).dt.days / 30).clip(lower=0.5)
+    per_m['월평균매출'] = per_m['총매출'] / per_m['활동개월수']
+    per_m['건단가'] = per_m['총매출'] / per_m['총주문건수']
+    per_m['구매빈도'] = per_m['총주문건수'] / per_m['활동개월수']
+    per_m['이탈여부'] = (base_date - per_m['마지막주문일']).dt.days > 60
+ 
+    # ── 재구매 주기: 거래처별 연속 주문일 간격 중앙값 ──
+    od = ord_.copy()
+    od['주문일자'] = od['주문일'].dt.date
+    od_dedup = od.drop_duplicates(subset=['주문자 ID', '주문일자']).sort_values(['주문자 ID', '주문일자'])
+ 
+    cycles = []
+    for uid, grp in od_dedup.groupby('주문자 ID'):
+        dates = pd.to_datetime(grp['주문일자'].values)
+        if len(dates) < 2:
+            cycles.append({'주문자 ID': uid, '재구매주기': np.nan})
+            continue
+        gaps = [(dates[i+1]-dates[i]).days for i in range(len(dates)-1)]
+        cycles.append({'주문자 ID': uid, '재구매주기': np.median(gaps)})
+    cycle_df = pd.DataFrame(cycles)
+    per_m = per_m.merge(cycle_df, on='주문자 ID', how='left')
+ 
+    # ── 세그별 재구매 주기 구간 분포 (간격 단위) ──
+    gap_rows = []
+    for uid, grp in od_dedup.groupby('주문자 ID'):
+        seg_val = seg_map.get(uid, '미분류')
+        dates = pd.to_datetime(grp['주문일자'].values)
+        if len(dates) < 2: continue
+        for i in range(len(dates)-1):
+            gap_rows.append({'세그': seg_val, 'gap': (dates[i+1]-dates[i]).days})
+    gap_df = pd.DataFrame(gap_rows) if gap_rows else pd.DataFrame(columns=['세그','gap'])
+ 
+    # ── 세그별 집계 ──
+    result = []
+    for seg, seg_grp in seg_members.groupby('세그'):
+        total_mem = len(seg_grp)
+        pm = per_m[per_m['세그'] == seg]
+        order_mem = len(pm)
+        if order_mem == 0:
+            continue
+        no_order = total_mem - order_mem
+ 
+        # 재구매 주기 구간 분포
+        seg_gaps = gap_df[gap_df['세그'] == seg]['gap'] if not gap_df.empty else pd.Series([], dtype=float)
+        total_gaps = len(seg_gaps)
+        def pct(cond): return round(cond.sum()/total_gaps*100, 1) if total_gaps > 0 else 0.0
+ 
+        cycle_med = pm['재구매주기'].dropna()
+ 
+        # 매출수준 태그
+        med_sales = pm['월평균매출'].median() / 10000
+        med_price = pm['건단가'].median() / 10000
+        med_freq  = pm['구매빈도'].median()
+        sales_tag = '상' if med_sales >= 8 else ('중' if med_sales >= 5 else '하')
+        price_tag = '상' if med_price >= 8 else ('중' if med_price >= 5 else '하')
+        freq_tag  = '고' if med_freq >= 1.3 else ('중' if med_freq >= 0.9 else '저')
+ 
+        result.append({
+            '세그': seg,
+            '전체거래처수': total_mem,
+            '주문거래처수': order_mem,
+            '미주문거래처수': no_order,
+            '주문비율': round(order_mem / total_mem * 100, 1),
+            '월평균매출_중앙': round(med_sales, 2),
+            '건단가_중앙': round(med_price, 2),
+            '구매빈도_중앙': round(med_freq, 1),
+            '활동개월수_중앙': round(pm['활동개월수'].median(), 1),
+            '재구매주기_중앙': round(cycle_med.median(), 1) if len(cycle_med) > 0 else 0.0,
+            '이탈수': int(pm['이탈여부'].sum()),
+            '이탈비율': round(pm['이탈여부'].mean() * 100, 1),
+            '활성수': int((~pm['이탈여부']).sum()),
+            '활성비율': round((~pm['이탈여부']).mean() * 100, 1),
+            '매출태그': sales_tag,
+            '건단가태그': price_tag,
+            '빈도태그': freq_tag,
+            '주기_p1': pct(seg_gaps <= 30),
+            '주기_p2': pct((seg_gaps > 30) & (seg_gaps <= 60)),
+            '주기_p3': pct((seg_gaps > 60) & (seg_gaps <= 90)),
+            '주기_p6': pct((seg_gaps > 90) & (seg_gaps <= 180)),
+            '주기_p6o': pct(seg_gaps > 180),
+        })
+ 
+    return pd.DataFrame(result).sort_values('주문거래처수', ascending=False).reset_index(drop=True)
+ 
+ 
+# ── ① 종합 프로파일 테이블 ──
+def render_seg_profile(seg_df, kp=""):
+    st.markdown("#### 세그먼트 종합 프로파일")
+ 
+    tag_colors = {
+        '상': ('background:#E0F5EE;color:#085041', '▲'),
+        '중': ('background:#F2EFE8;color:#555', '━'),
+        '하': ('background:#FCEBEB;color:#7a1f1f', '▼'),
+        '고': ('background:#E0F5EE;color:#085041', '▲'),
+        '저': ('background:#FCEBEB;color:#7a1f1f', '▼'),
+    }
+ 
+    search = st.text_input("🔍 세그먼트 검색", key=f"{kp}_seg_search" if kp else "seg_search_main",
+                           placeholder="예: 요양, 치과, 내과...")
+    df = seg_df.copy()
+    if search:
+        df = df[df['세그'].str.contains(search, case=False, na=False)]
+    st.caption(f"{len(df)}개 세그먼트 표시 중")
+ 
+    # 이탈위험 컬러 함수
+    def churn_color(v):
+        if v >= 50: return 'color:#c0392b;font-weight:700'
+        if v <= 25: return 'color:#0a5e47;font-weight:700'
+        return 'color:#444'
+ 
+    def active_color(v):
+        if v >= 70: return 'color:#0a5e47;font-weight:700'
+        if v <= 50: return 'color:#c0392b;font-weight:700'
+        return 'color:#444'
+ 
+    def cycle_color(v):
+        if v <= 15: return 'color:#0a5e47;font-weight:700'
+        if v >= 30: return 'color:#c0392b;font-weight:700'
+        return 'color:#444'
+ 
+    rows_html = ""
+    for _, row in df.iterrows():
+        def tag(val, kind='매출'):
+            style, icon = tag_colors.get(val, ('background:#eee;color:#555', '━'))
+            return f'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;{style}">{icon} {val}</span>'
+ 
+        rows_html += f"""<tr>
+            <td style="font-weight:600;white-space:nowrap">{row['세그']}</td>
+            <td>{row['전체거래처수']:,}</td>
+            <td>{row['주문거래처수']:,}</td>
+            <td>{row['미주문거래처수']:,}</td>
+            <td>{row['주문비율']:.1f}%</td>
+            <td>{tag(row['매출태그'])} <small style="color:#888">{row['월평균매출_중앙']:.2f}만</small></td>
+            <td>{tag(row['건단가태그'])} <small style="color:#888">{row['건단가_중앙']:.2f}만</small></td>
+            <td>{tag(row['빈도태그'], '빈도')} <small style="color:#888">{row['구매빈도_중앙']:.1f}건</small></td>
+            <td>{row['활동개월수_중앙']:.1f}개월</td>
+            <td style="{cycle_color(row['재구매주기_중앙'])}">{row['재구매주기_중앙']:.1f}일</td>
+            <td style="{churn_color(row['이탈비율'])}">{row['이탈수']:,}개 ({row['이탈비율']:.1f}%)</td>
+            <td style="{active_color(row['활성비율'])}">{row['활성수']:,}개 ({row['활성비율']:.1f}%)</td>
+        </tr>"""
+ 
+    st.markdown(f"""
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;
+                  overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.09);font-size:11px">
+      <thead>
+        <tr style="background:#2d4a7a;color:#adc8ff;font-size:10px">
+          <th style="padding:4px 8px;text-align:left">세그먼트</th>
+          <th colspan="4" style="padding:4px 8px;text-align:center">거래처 현황</th>
+          <th colspan="3" style="padding:4px 8px;text-align:center">구매 특성</th>
+          <th style="padding:4px 8px;text-align:center">활동</th>
+          <th style="padding:4px 8px;text-align:center">재구매주기</th>
+          <th style="padding:4px 8px;text-align:center">이탈위험</th>
+          <th style="padding:4px 8px;text-align:center">활성</th>
+        </tr>
+        <tr style="background:#1B2A4A;color:#fff;font-size:11px">
+          <th style="padding:8px;text-align:left">세그먼트</th>
+          <th style="padding:8px;text-align:center">전체</th>
+          <th style="padding:8px;text-align:center">주문</th>
+          <th style="padding:8px;text-align:center">미주문</th>
+          <th style="padding:8px;text-align:center">주문비율</th>
+          <th style="padding:8px;text-align:center">월평균매출</th>
+          <th style="padding:8px;text-align:center">건단가</th>
+          <th style="padding:8px;text-align:center">구매빈도</th>
+          <th style="padding:8px;text-align:center">활동개월수</th>
+          <th style="padding:8px;text-align:center">중앙주기(일)</th>
+          <th style="padding:8px;text-align:center">건수(비율)</th>
+          <th style="padding:8px;text-align:center">건수(비율)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows_html}
+      </tbody>
+    </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#888">
+      🟢 상/고: ≥8만/≥1.3건 &nbsp;|&nbsp; 🟡 중: 5~8만/0.9~1.2건 &nbsp;|&nbsp; 🔴 하/저: &lt;5만/&lt;0.9건
+      &nbsp;|&nbsp; 이탈위험: 마지막 주문 후 60일 초과 &nbsp;|&nbsp; 월평균매출·건단가·재구매주기: 중앙값 기준
+    </div>
+    """, unsafe_allow_html=True)
+ 
+ 
+# ── ② 거래처 규모 분포 ──
+def render_seg_size_dist(seg_df, kp=""):
+    st.markdown("#### 거래처 규모 분포")
+    df = seg_df.sort_values('전체거래처수', ascending=True).tail(30)
+ 
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("##### 전체 / 주문 / 미주문 구성")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            y=df['세그'], x=df['주문거래처수'], name='주문거래처',
+            orientation='h', marker_color='#3366CC',
+            hovertemplate='%{y}<br>주문: %{x:,}개<extra></extra>'
+        ))
+        fig.add_trace(go.Bar(
+            y=df['세그'], x=df['미주문거래처수'], name='미주문거래처',
+            orientation='h', marker_color='#BDC3C7',
+            hovertemplate='%{y}<br>미주문: %{x:,}개<extra></extra>'
+        ))
+        fig.update_layout(
+            height=max(500, len(df)*26+100), barmode='stack',
+            margin=dict(l=160,r=60,t=30,b=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+            xaxis=dict(title='거래처 수', tickfont=dict(size=10)),
+            yaxis=dict(tickfont=dict(size=10))
+        )
+        st.plotly_chart(fig, use_container_width=True, key=_k(kp,"seg_size"))
+ 
+    with c2:
+        st.markdown("##### 주문비율 (주문거래처 ÷ 전체거래처)")
+        df2 = seg_df.sort_values('주문비율', ascending=True).tail(30)
+        avg_rate = seg_df['주문비율'].mean()
+        bar_colors = ['#3366CC' if v >= avg_rate else '#A8DADC' for v in df2['주문비율']]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(
+            y=df2['세그'], x=df2['주문비율'], name='주문비율',
+            orientation='h', marker_color=bar_colors,
+            text=[f"{v:.1f}%" for v in df2['주문비율']],
+            textposition='outside', textfont=dict(size=9),
+            hovertemplate='%{y}<br>주문비율: %{x:.1f}%<extra></extra>'
+        ))
+        fig2.add_vline(x=avg_rate, line_dash="dash", line_color="#E74C3C",
+                       annotation_text=f"평균 {avg_rate:.1f}%",
+                       annotation_font=dict(size=10, color="#E74C3C"))
+        fig2.update_layout(
+            height=max(500, len(df2)*26+100),
+            margin=dict(l=160,r=80,t=30,b=40), showlegend=False,
+            xaxis=dict(title='주문비율 (%)', ticksuffix='%', tickfont=dict(size=10), range=[0,115]),
+            yaxis=dict(tickfont=dict(size=10))
+        )
+        st.plotly_chart(fig2, use_container_width=True, key=_k(kp,"seg_ratio"))
+ 
+ 
+# ── ③ 사분면 차트 (건단가 × 월평균매출) ──
+def render_seg_quadrant(seg_df, kp=""):
+    st.markdown("#### 사분면 차트 — 건단가 × 월평균매출")
+    st.caption("X축: 건단가 중앙값(만원) | Y축: 월평균매출 중앙값(만원) | 버블 크기: 주문거래처수")
+ 
+    freq_colors = {'고': '#2E86AB', '중': '#E8C547', '저': '#E8853D'}
+    df = seg_df.copy()
+ 
+    fig = go.Figure()
+    for freq_val, grp in df.groupby('빈도태그'):
+        fig.add_trace(go.Scatter(
+            x=grp['건단가_중앙'], y=grp['월평균매출_중앙'],
+            mode='markers+text',
+            name=f'빈도 {freq_val}',
+            marker=dict(
+                size=[max(12, min(60, v/5)) for v in grp['주문거래처수']],
+                color=freq_colors.get(freq_val, '#999'),
+                opacity=0.75, line=dict(width=1, color='white')
+            ),
+            text=grp['세그'].str.replace(' ', '\n'),
+            textposition='top center',
+            textfont=dict(size=9),
+            customdata=list(zip(
+                grp['세그'], grp['주문거래처수'],
+                grp['이탈비율'], grp['구매빈도_중앙']
+            )),
+            hovertemplate=(
+                '<b>%{customdata[0]}</b><br>'
+                '건단가: %{x:.2f}만원<br>'
+                '월평균매출: %{y:.2f}만원<br>'
+                '주문거래처수: %{customdata[1]:,}개<br>'
+                '구매빈도: %{customdata[3]:.1f}건/월<br>'
+                '이탈위험: %{customdata[2]:.1f}%<extra></extra>'
+            )
+        ))
+ 
+    # 사분면 기준선
+    x_mid = df['건단가_중앙'].median()
+    y_mid = df['월평균매출_중앙'].median()
+    fig.add_vline(x=x_mid, line_dash="dot", line_color="#94a3b8", line_width=1)
+    fig.add_hline(y=y_mid, line_dash="dot", line_color="#94a3b8", line_width=1)
+ 
+    # 사분면 레이블
+    x_max = df['건단가_중앙'].max() * 1.05
+    y_max = df['월평균매출_중앙'].max() * 1.05
+    quadrant_labels = [
+        (x_max, y_max, "우상단\nVIP 핵심", "right"),
+        (x_mid * 0.3, y_max, "좌상단\n업셀링 대상", "left"),
+        (x_max, y_mid * 0.3, "우하단\n빈도 개선", "right"),
+        (x_mid * 0.3, y_mid * 0.3, "좌하단\n전략 재검토", "left"),
+    ]
+    for xp, yp, txt, align in quadrant_labels:
+        fig.add_annotation(x=xp, y=yp, text=txt, showarrow=False,
+                           font=dict(size=9, color="#94a3b8"),
+                           xanchor=align, yanchor="top")
+ 
+    fig.update_layout(
+        height=600, margin=dict(l=60, r=40, t=40, b=60),
+        xaxis=dict(title='건단가 중앙값 (만원)', tickfont=dict(size=11), ticksuffix='만'),
+        yaxis=dict(title='월평균매출 중앙값 (만원)', tickfont=dict(size=11), ticksuffix='만'),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11))
+    )
+    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"seg_quad"))
+ 
+ 
+# ── ④ 재구매 주기 분포 ──
+def render_seg_cycle_dist(seg_df, kp=""):
+    st.markdown("#### 재구매 주기 구간 분포")
+    st.caption("연속 구매 간격 기준 | p1: 1개월이내 / p2: 2개월이내 / p3: 3개월이내 / p6: 6개월이내 / p6o: 6개월초과")
+ 
+    df = seg_df.sort_values('주기_p1', ascending=True).copy()
+ 
+    fig = go.Figure()
+    cols_info = [
+        ('주기_p1',  '1개월이내',  '#2E86AB'),
+        ('주기_p2',  '2개월이내',  '#A8DADC'),
+        ('주기_p3',  '3개월이내',  '#E8C547'),
+        ('주기_p6',  '6개월이내',  '#E8853D'),
+        ('주기_p6o', '6개월초과',  '#E74C3C'),
+    ]
+    for col, name, color in cols_info:
+        fig.add_trace(go.Bar(
+            y=df['세그'], x=df[col], name=name,
+            orientation='h', marker_color=color,
+            hovertemplate=f'%{{y}}<br>{name}: %{{x:.1f}}%<extra></extra>'
+        ))
+ 
+    fig.update_layout(
+        height=max(500, len(df)*26+120), barmode='stack',
+        margin=dict(l=160, r=40, t=30, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+        xaxis=dict(title='비율 (%)', ticksuffix='%', tickfont=dict(size=10), range=[0,105]),
+        yaxis=dict(tickfont=dict(size=10))
+    )
+    st.plotly_chart(fig, use_container_width=True, key=_k(kp,"seg_cycle"))
+ 
+ 
+# ── ⑤ 이탈위험비율 비교 ──
+def render_seg_churn(seg_df, kp=""):
+    st.markdown("#### 이탈위험비율 비교")
+    st.caption("마지막 주문 후 60일 초과 거래처 기준")
+ 
+    c1, c2 = st.columns(2)
+ 
+    with c1:
+        st.markdown("##### 이탈위험비율 (%) — 내림차순")
+        df1 = seg_df.sort_values('이탈비율', ascending=True).copy()
+        bar_colors = ['#E74C3C' if v >= 50 else '#E8853D' if v >= 30 else '#3366CC'
+                      for v in df1['이탈비율']]
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(
+            y=df1['세그'], x=df1['이탈비율'],
+            orientation='h', marker_color=bar_colors,
+            text=[f"{v:.1f}%" for v in df1['이탈비율']],
+            textposition='outside', textfont=dict(size=9),
+            customdata=list(zip(df1['이탈수'], df1['주문거래처수'], df1['활성비율'])),
+            hovertemplate='%{y}<br>이탈위험: %{x:.1f}%<br>이탈수: %{customdata[0]:,}개 / 주문거래처: %{customdata[1]:,}개<br>활성비율: %{customdata[2]:.1f}%<extra></extra>'
+        ))
+        fig1.add_vline(x=50, line_dash="dash", line_color="#E74C3C",
+                       annotation_text="50% 기준선",
+                       annotation_font=dict(size=10, color="#E74C3C"))
+        fig1.update_layout(
+            height=max(500, len(df1)*26+100),
+            margin=dict(l=160,r=80,t=30,b=40), showlegend=False,
+            xaxis=dict(title='이탈위험비율 (%)', ticksuffix='%', range=[0,115], tickfont=dict(size=10)),
+            yaxis=dict(tickfont=dict(size=10))
+        )
+        st.plotly_chart(fig1, use_container_width=True, key=_k(kp,"seg_churn_pct"))
+ 
+    with c2:
+        st.markdown("##### 이탈위험 거래처 수 (절대값) — 내림차순")
+        df2 = seg_df.sort_values('이탈수', ascending=True).copy()
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(
+            y=df2['세그'], x=df2['활성수'], name='활성',
+            orientation='h', marker_color='#3366CC',
+            hovertemplate='%{y}<br>활성: %{x:,}개<extra></extra>'
+        ))
+        fig2.add_trace(go.Bar(
+            y=df2['세그'], x=df2['이탈수'], name='이탈위험',
+            orientation='h', marker_color='#E74C3C',
+            hovertemplate='%{y}<br>이탈위험: %{x:,}개<extra></extra>'
+        ))
+        fig2.update_layout(
+            height=max(500, len(df2)*26+100), barmode='stack',
+            margin=dict(l=160,r=60,t=30,b=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=11)),
+            xaxis=dict(title='거래처 수', tickfont=dict(size=10)),
+            yaxis=dict(tickfont=dict(size=10))
+        )
+        st.plotly_chart(fig2, use_container_width=True, key=_k(kp,"seg_churn_abs"))
+
+# 세그먼트 집계 (CHART_REGISTRY에서 참조)
+_seg_df_cache = _build_segment_data(orders, members)
 
 # ============================================================
 # render 함수들 — kp="" 이면 일반탭, kp="custom_C01_0" 이면 커스터마이징탭
@@ -1012,9 +1434,8 @@ def render_material_pnl_table(kp=""):
     st.dataframe(mat_pnl.style.format({'매출액':'{:,.0f}원','매출원가':'{:,.0f}원','매출총이익':'{:,.0f}원','매출총이익률':'{:.1f}%','판관비':'{:,.0f}원','영업이익':'{:,.0f}원','영업이익률':'{:.1f}%','판매수량':'{:,.0f}'}).map(highlight_negative,subset=['영업이익','영업이익률']),use_container_width=True,height=550)
     
 def _get_hospital_members():
-    """병원 회원등급 기관만 필터"""
     hosp = members[members['회원등급'] == '병원'].copy()
-    for col in ['병원구분','진료과']:
+    for col in ['기관구분','기관유형']:
         if col not in hosp.columns:
             hosp[col] = '미분류'
     return hosp
@@ -1025,37 +1446,37 @@ def _get_hospital_orders():
     return orders[orders['주문자 ID'].isin(hosp['아이디'].tolist())]
 
 def render_hospital_type_dist(kp=""):
-    st.markdown("#### 병원구분별 가입자 분포")
+    st.markdown("#### 기관구분별 가입자 분포")
     hosp = _get_hospital_members()
-    gd = hosp['병원구분'].value_counts().reset_index(); gd.columns=['병원구분','수']
+    gd = hosp['기관구분'].value_counts().reset_index(); gd.columns=['기관구분','수']
     gd = gd.sort_values('수', ascending=True)
-    fig = px.bar(gd,x='수',y='병원구분',orientation='h',color_discrete_sequence=COLORS)
+    fig = px.bar(gd,x='수',y='기관구분',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
     fig.update_layout(height=max(350,len(gd)*40+120),margin=dict(l=120,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_type_dist"))
 
-    # 병원구분 선택 → 진료과 드릴다운
-    type_opts = ['선택 안 함'] + sorted(hosp['병원구분'].unique().tolist())
-    sel_type = st.selectbox("병원구분 선택 시 진료과별 상세 표시", type_opts,
+    # 기관구분 선택 → 기관유형 드릴다운
+    type_opts = ['선택 안 함'] + sorted(hosp['기관구분'].unique().tolist())
+    sel_type = st.selectbox("기관구분 선택 시 기관유형별 상세 표시", type_opts,
         key=f"{kp}_hosp_drill" if kp else "hosp_drill_main")
     if sel_type != '선택 안 함':
-        st.markdown(f"##### {sel_type} — 진료과별 가입자 분포")
-        sub = hosp[hosp['병원구분'] == sel_type]
-        dept = sub['진료과'].value_counts().reset_index(); dept.columns=['진료과','수']
+        st.markdown(f"##### {sel_type} — 기관유형별 가입자 분포")
+        sub = hosp[hosp['기관구분'] == sel_type]
+        dept = sub['기관유형'].value_counts().reset_index(); dept.columns=['기관유형','수']
         dept = dept.sort_values('수', ascending=True)
         if dept.empty:
-            st.info("진료과 데이터가 없습니다.")
+            st.info("기관유형 데이터가 없습니다.")
         else:
-            fig2 = px.bar(dept,x='수',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+            fig2 = px.bar(dept,x='수',y='기관유형',orientation='h',color_discrete_sequence=COLORS)
             fig2.update_traces(text=[fmt_num(v) for v in dept['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
             fig2.update_layout(height=max(300,len(dept)*35+100),margin=dict(l=140,r=80,t=20,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
             st.plotly_chart(fig2,use_container_width=True,key=_k(kp,"hosp_dept_drill"))
-            # 월별 신규가입 추이 (진료과별 stacked bar)
+            # 월별 신규가입 추이 (기관유형별 stacked bar)
             st.markdown(f"##### {sel_type} — 월별 신규가입 추이")
-            monthly = sub.groupby(['가입월','진료과']).size().reset_index(name='가입자수')
+            monthly = sub.groupby(['가입월','기관유형']).size().reset_index(name='가입자수')
             monthly['가입월_kr'] = ym_series_kr(monthly['가입월'])
             monthly = monthly.sort_values('가입월')
-            fig3 = px.bar(monthly, x='가입월_kr', y='가입자수', color='진료과', color_discrete_sequence=COLORS)
+            fig3 = px.bar(monthly, x='가입월_kr', y='가입자수', color='기관유형', color_discrete_sequence=COLORS)
             for tr in fig3.data: tr.hovertemplate='%{x}<br>'+tr.name+': %{y:,}처<extra></extra>'
             fig3.update_layout(height=400, barmode='stack', margin=dict(l=60,r=30,t=30,b=70),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, font=dict(size=10)),
@@ -1063,35 +1484,35 @@ def render_hospital_type_dist(kp=""):
             st.plotly_chart(fig3, use_container_width=True, key=_k(kp,"hosp_monthly_drill"))
 
 def render_hospital_dept_dist(kp=""):
-    st.markdown("#### 진료과별 가입자 분포")
+    st.markdown("#### 기관유형별 가입자 분포")
     hosp = _get_hospital_members()
-    gd = hosp['진료과'].value_counts().reset_index(); gd.columns=['진료과','수']
+    gd = hosp['기관유형'].value_counts().reset_index(); gd.columns=['기관유형','수']
     gd = gd.sort_values('수', ascending=True)
-    fig = px.bar(gd,x='수',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+    fig = px.bar(gd,x='수',y='기관유형',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_num(v) for v in gd['수']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}: %{x:,}처<extra></extra>')
     fig.update_layout(height=max(350,len(gd)*35+120),margin=dict(l=140,r=80,t=30,b=40),showlegend=False,xaxis=dict(title='가입자 수 (처)',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_dist"))
 
 def render_hospital_type_sales(kp=""):
-    st.markdown("#### 병원구분별 매출")
+    st.markdown("#### 기관구분별 매출")
     hosp = _get_hospital_members()
     hosp_orders = _get_hospital_orders()
-    id_to_type = hosp.set_index('아이디')['병원구분'].to_dict()
-    hosp_orders = hosp_orders.copy(); hosp_orders['병원구분'] = hosp_orders['주문자 ID'].map(id_to_type)
-    gs = hosp_orders.groupby('병원구분').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
-    fig = px.bar(gs,x='매출',y='병원구분',orientation='h',color_discrete_sequence=COLORS)
+    id_to_type = hosp.set_index('아이디')['기관구분'].to_dict()
+    hosp_orders = hosp_orders.copy(); hosp_orders['기관구분'] = hosp_orders['주문자 ID'].map(id_to_type)
+    gs = hosp_orders.groupby('기관구분').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
+    fig = px.bar(gs,x='매출',y='기관구분',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>기관: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']],gs['주문건수'],gs['주문기관수'])))
     fig.update_layout(height=max(350,len(gs)*40+120),margin=dict(l=120,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_type_sales"))
 
 def render_hospital_dept_sales(kp=""):
-    st.markdown("#### 진료과별 매출")
+    st.markdown("#### 기관유형별 매출")
     hosp = _get_hospital_members()
     hosp_orders = _get_hospital_orders()
-    id_to_dept = hosp.set_index('아이디')['진료과'].to_dict()
-    hosp_orders = hosp_orders.copy(); hosp_orders['진료과'] = hosp_orders['주문자 ID'].map(id_to_dept)
-    gs = hosp_orders.groupby('진료과').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
-    fig = px.bar(gs,x='매출',y='진료과',orientation='h',color_discrete_sequence=COLORS)
+    id_to_dept = hosp.set_index('아이디')['기관유형'].to_dict()
+    hosp_orders = hosp_orders.copy(); hosp_orders['기관유형'] = hosp_orders['주문자 ID'].map(id_to_dept)
+    gs = hosp_orders.groupby('기관유형').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),주문기관수=('주문자 ID','nunique')).reset_index().sort_values('매출')
+    fig = px.bar(gs,x='매출',y='기관유형',orientation='h',color_discrete_sequence=COLORS)
     fig.update_traces(text=[fmt_krw_short(v) for v in gs['매출']],textposition='outside',textfont=dict(size=11),hovertemplate='%{y}<br>매출: %{customdata[0]}<br>주문: %{customdata[1]:,}건<br>기관: %{customdata[2]:,}처<extra></extra>',customdata=list(zip([f"{v:,.0f}원" for v in gs['매출']],gs['주문건수'],gs['주문기관수'])))
     fig.update_layout(height=max(350,len(gs)*35+120),margin=dict(l=140,r=100,t=30,b=40),showlegend=False,xaxis=dict(title='매출액',tickfont=dict(size=11)),yaxis=dict(title='',tickfont=dict(size=12)))
     st.plotly_chart(fig,use_container_width=True,key=_k(kp,"hosp_dept_sales"))
@@ -1138,15 +1559,20 @@ CHART_REGISTRY = {
     "C36":{"name":"🔬 진료과별 가입자 분포","tab":"병원 분석","fn":render_hospital_dept_dist},
     "C37":{"name":"💰 병원구분별 매출","tab":"병원 분석","fn":render_hospital_type_sales},
     "C38":{"name":"💊 진료과별 매출","tab":"병원 분석","fn":render_hospital_dept_sales},
+    "C39":{"name":"🔬 세그먼트 종합 프로파일","tab":"세그먼트 분석","fn": lambda kp="": render_seg_profile(_seg_df_cache, kp)},
+    "C40":{"name":"📦 세그먼트 거래처 규모 분포","tab":"세그먼트 분석","fn": lambda kp="": render_seg_size_dist(_seg_df_cache, kp)},
+    "C41":{"name":"📌 세그먼트 사분면 차트","tab":"세그먼트 분석","fn": lambda kp="": render_seg_quadrant(_seg_df_cache, kp)},
+    "C42":{"name":"🔄 세그먼트 재구매 주기 분포","tab":"세그먼트 분석","fn": lambda kp="": render_seg_cycle_dist(_seg_df_cache, kp)},
+    "C43":{"name":"⚠️ 세그먼트 이탈위험비율","tab":"세그먼트 분석","fn": lambda kp="": render_seg_churn(_seg_df_cache, kp)},
 }
 
 # ============================================================
 # 탭 구성
 # ============================================================
-tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10 = st.tabs([
+tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10,tab11 = st.tabs([
     "📋 종합 현황","💵 매출 분석","📦 상품 분석","👥 회원 분석",
     "🔗 추천인 분석","🤝 케어포 멤버십","📈 손익 분석","🏥 일차의료 시범기관",
-    "🏨 병원 분석","⚙️ 커스터마이징"
+    "🏨 병원 분석","🔬 세그먼트 분석","⚙️ 커스터마이징"
 ])
 
 # ============================================================
@@ -1441,9 +1867,46 @@ with tab9:
     with cr: render_hospital_dept_sales()
 
 # ============================================================
-# Tab 10. 커스터마이징
+# Tab 10. 세그먼트별 분석
 # ============================================================
 with tab10:
+
+     if _seg_df_cache.empty:
+         st.warning("⚠️ 세그먼트 데이터가 없습니다. 회원정보의 기관구분·기관유형 컬럼을 확인해주세요.")
+     else:
+         seg_total    = len(_seg_df_cache)
+         seg_order    = _seg_df_cache['주문거래처수'].sum()
+         seg_churn    = _seg_df_cache['이탈수'].sum()
+         seg_active   = _seg_df_cache['활성수'].sum()
+         seg_churn_r  = round(seg_churn / seg_order * 100, 1) if seg_order > 0 else 0
+
+         cols = st.columns(5)
+         for col, (l, v, u) in zip(cols, [
+             ("세그먼트 수",       fmt_num(seg_total),   "개"),
+             ("전체 거래처 수",    fmt_num(_seg_df_cache['전체거래처수'].sum()), "처"),
+             ("주문 거래처 수",    fmt_num(seg_order),   "처"),
+             ("이탈위험 거래처",   fmt_num(seg_churn),   "처"),
+             ("전체 이탈위험율",   fmt_pct(seg_churn_r), ""),
+         ]):
+             col.markdown(kpi_card(l, v, u), unsafe_allow_html=True)
+
+         st.markdown("---")
+
+         sub1, sub2, sub3, sub4, sub5 = st.tabs([
+             "① 종합 프로파일", "② 거래처 규모 분포",
+             "③ 사분면 차트",   "④ 재구매 주기 분포",
+             "⑤ 이탈위험비율"
+         ])
+         with sub1: render_seg_profile(_seg_df_cache)
+         with sub2: render_seg_size_dist(_seg_df_cache)
+         with sub3: render_seg_quadrant(_seg_df_cache)
+         with sub4: render_seg_cycle_dist(_seg_df_cache)
+         with sub5: render_seg_churn(_seg_df_cache)
+
+# ============================================================
+# Tab 11. 커스터마이징
+# ============================================================
+with tab11:
     from streamlit_sortables import sort_items
     st.markdown("### ⚙️ 대시보드 커스터마이징")
     st.markdown("차트를 선택하고 **▶ 순서 조정으로 이동** 버튼을 누르세요.")
