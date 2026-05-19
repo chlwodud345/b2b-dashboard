@@ -1961,7 +1961,7 @@ with tab10:
 
          st.markdown("---")
 
-         sub1, sub2, sub3, sub4, sub5 = st.tabs([
+         sub1, sub2, sub3, sub4, sub5, sub6 = st.tabs([
              "① 종합 프로파일", "② 거래처 규모 분포",
              "③ 사분면 차트",   "④ 재구매 주기 분포",
              "⑤ 이탈위험비율",  "⑥ 기초지표 히트맵"
