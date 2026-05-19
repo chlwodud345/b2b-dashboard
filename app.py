@@ -814,6 +814,70 @@ def render_seg_churn(seg_df, kp=""):
         )
         st.plotly_chart(fig2, use_container_width=True, key=_k(kp,"seg_churn_abs"))
 
+# ── ⑥ 기초지표 히트맵 ──
+def render_seg_heatmap(seg_df, kp=""):
+    st.markdown("#### 기초지표 태그 히트맵 — 매출 / 건단가 / 빈도")
+    st.caption("🟦 상/고 &nbsp;|&nbsp; 🩵 중 &nbsp;|&nbsp; 🟨 하/저 &nbsp;|&nbsp; 월평균매출 중앙값 기준 내림차순 정렬")
+
+    df = seg_df.sort_values('월평균매출_중앙', ascending=False).reset_index(drop=True)
+
+    tag_bg = {
+        '상': '#E0F5EE', '중': '#F2EFE8', '하': '#FCEBEB',
+        '고': '#E0F5EE', '저': '#FCEBEB',
+    }
+    tag_color = {
+        '상': '#085041', '중': '#555', '하': '#7a1f1f',
+        '고': '#085041', '저': '#7a1f1f',
+    }
+
+    # 헤더 행
+    seg_headers = ''.join([
+        f'<th style="padding:6px 10px;background:#1B2A4A;color:#fff;font-size:10px;'
+        f'white-space:nowrap;text-align:center;min-width:80px">{s}</th>'
+        for s in df['세그']
+    ])
+
+    rows_html = ''
+    for label, col in [('매출수준', '매출태그'), ('건단가수준', '건단가태그'), ('빈도수준', '빈도태그')]:
+        cells = ''
+        for _, row in df.iterrows():
+            val = row[col]
+            num_col = {'매출태그': '월평균매출_중앙', '건단가태그': '건단가_중앙', '빈도태그': '구매빈도_중앙'}[col]
+            num_val = row[num_col]
+            unit = '만' if col != '빈도태그' else '건'
+            bg = tag_bg.get(val, '#eee')
+            fc = tag_color.get(val, '#555')
+            cells += (
+                f'<td style="text-align:center;padding:6px 4px;background:{bg}">'
+                f'<span style="font-size:11px;font-weight:700;color:{fc}">{val}</span>'
+                f'<br><span style="font-size:10px;color:#888">{num_val:.1f}{unit}</span>'
+                f'</td>'
+            )
+        rows_html += (
+            f'<tr><th style="padding:8px 12px;background:#2d4a7a;color:#adc8ff;'
+            f'font-size:11px;white-space:nowrap;text-align:left">{label}</th>{cells}</tr>'
+        )
+
+    st.markdown(f"""
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;background:#fff;font-size:11px;
+                  box-shadow:0 1px 4px rgba(0,0,0,.09);border-radius:8px;overflow:hidden">
+      <thead>
+        <tr>
+          <th style="padding:6px 12px;background:#1B2A4A;color:#fff;font-size:11px;
+                     white-space:nowrap;text-align:left">지표 \\ 세그</th>
+          {seg_headers}
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#888">
+      매출/건단가: 상 ≥8만 / 중 5~8만 / 하 &lt;5만 &nbsp;|&nbsp;
+      빈도: 고 ≥1.3건/월 / 중 0.9~1.2건/월 / 저 &lt;0.9건/월
+    </div>
+    """, unsafe_allow_html=True)
+
 # 세그먼트 집계 (CHART_REGISTRY에서 참조)
 _seg_df_cache = _build_segment_data(orders, members)
 
@@ -1568,6 +1632,7 @@ CHART_REGISTRY = {
     "C41":{"name":"📌 세그먼트 사분면 차트","tab":"세그먼트 분석","fn": lambda kp="": render_seg_quadrant(_seg_df_cache, kp)},
     "C42":{"name":"🔄 세그먼트 재구매 주기 분포","tab":"세그먼트 분석","fn": lambda kp="": render_seg_cycle_dist(_seg_df_cache, kp)},
     "C43":{"name":"⚠️ 세그먼트 이탈위험비율","tab":"세그먼트 분석","fn": lambda kp="": render_seg_churn(_seg_df_cache, kp)},
+    "C44":{"name":"🗺️ 세그먼트 기초지표 히트맵","tab":"세그먼트 분석","fn": lambda kp="": render_seg_heatmap(_seg_df_cache, kp)},
 }
 
 # ============================================================
@@ -1899,13 +1964,14 @@ with tab10:
          sub1, sub2, sub3, sub4, sub5 = st.tabs([
              "① 종합 프로파일", "② 거래처 규모 분포",
              "③ 사분면 차트",   "④ 재구매 주기 분포",
-             "⑤ 이탈위험비율"
+             "⑤ 이탈위험비율",  "⑥ 기초지표 히트맵"
          ])
          with sub1: render_seg_profile(_seg_df_cache)
          with sub2: render_seg_size_dist(_seg_df_cache)
          with sub3: render_seg_quadrant(_seg_df_cache)
          with sub4: render_seg_cycle_dist(_seg_df_cache)
          with sub5: render_seg_churn(_seg_df_cache)
+         with sub6: render_seg_heatmap(_seg_df_cache)
 
 # ============================================================
 # Tab 11. 커스터마이징
