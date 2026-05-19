@@ -1290,6 +1290,7 @@ def render_carefor_monthly_trend(kp=""):
     cfg=['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
     co=filtered[filtered['회원 등급'].isin(cfg)]
     cf_monthly=co.groupby('주문월')['판매합계금액'].sum().reset_index(); cf_monthly['주문월_kr']=ym_series_kr(cf_monthly['주문월'])
+    if len(cf_monthly) == 0: st.info("케어포 주문 데이터가 없습니다."); return
     tvals_cfm,ttexts_cfm=krw_tickvals(cf_monthly['판매합계금액'])
     fig=go.Figure()
     fig.add_trace(go.Bar(x=cf_monthly['주문월_kr'],y=cf_monthly['판매합계금액'],name='매출액',marker_color='#27AE60',opacity=0.8,text=[fmt_krw_short(v) for v in cf_monthly['판매합계금액']],textposition='outside',textfont=dict(size=10),hovertemplate='%{x}<br>매출: %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in cf_monthly['판매합계금액']]))
