@@ -662,10 +662,13 @@ def render_seg_size_dist(seg_df, kp=""):
 # ── ③ 사분면 차트 (건단가 × 월평균매출) ──
 def render_seg_quadrant(seg_df, kp=""):
     st.markdown("#### 사분면 차트 — 건단가 × 월평균매출")
+    min_count = st.slider("최소 주문거래처 수", 1, 20, 5,
+        key=f"{kp}_quad_min" if kp else "quad_min_main")
+    df = seg_df[seg_df['주문거래처수'] >= min_count].copy()
+    st.caption(f"주문거래처 {min_count}개 이상 세그먼트만 표시 | {len(df)}개 세그먼트")
     st.caption("X축: 건단가 중앙값(만원) | Y축: 월평균매출 중앙값(만원) | 버블 크기: 주문거래처수")
  
     freq_colors = {'고': '#2E86AB', '중': '#E8C547', '저': '#E8853D'}
-    df = seg_df.copy()
  
     fig = go.Figure()
     for freq_val, grp in df.groupby('빈도태그'):
