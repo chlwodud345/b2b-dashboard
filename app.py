@@ -1,3 +1,36 @@
+# ============================================================
+# 비밀번호 인증
+# ============================================================
+def check_password():
+    if st.session_state.get("authenticated"):
+        return True
+    _, col, _ = st.columns([1, 1.5, 1])
+    with col:
+        st.markdown("""
+        <div style="margin-top:15vh;background:white;border-radius:16px;padding:40px 36px;
+                    box-shadow:0 4px 24px rgba(0,0,0,0.10);text-align:center;
+                    border:1px solid #e2e8f0;">
+            <div style="font-size:2.2rem;margin-bottom:8px;">📊</div>
+            <div style="font-size:1.2rem;font-weight:700;color:#1B2A4A;margin-bottom:4px;">
+                대상웰라이프 B2B몰</div>
+            <div style="font-size:0.85rem;color:#94a3b8;margin-bottom:28px;">
+                Sales & Operations Dashboard</div>
+        </div>
+        """, unsafe_allow_html=True)
+        pw = st.text_input("비밀번호", type="password",
+                           placeholder="비밀번호를 입력하세요",
+                           label_visibility="collapsed")
+        if st.button("로그인", type="primary", use_container_width=True):
+            if pw == st.secrets["PASSWORD"]:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("비밀번호가 올바르지 않습니다.")
+    return False
+
+if not check_password():
+    st.stop()
+
 import streamlit as st
 import pandas as pd
 import numpy as np
