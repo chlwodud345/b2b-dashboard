@@ -1,3 +1,12 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import io
+import requests
+
 # ============================================================
 # 비밀번호 인증
 # ============================================================
@@ -30,15 +39,6 @@ def check_password():
 
 if not check_password():
     st.stop()
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import io
-import requests
 
 st.set_page_config(page_title="대상웰라이프 B2B몰 대시보드", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
