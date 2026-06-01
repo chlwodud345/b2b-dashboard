@@ -1123,22 +1123,22 @@ def render_dormant_analysis(kp=""):
         st.plotly_chart(fig, use_container_width=True, key=_k(kp,"dormant_bar"))
 
 def _build_referral_data():
-    clm={}
-    for _,r in referrals_df.iterrows():
-        n=str(r.get('추천인','')).strip(); g=str(r.get('회원그룹',''))
-        if not n or n in ['-','nan']: continue
-        if g=='영업팀': clm[n]='케어포' if n=='케어포' else '영업팀'
-        elif g=='대리점 회원': clm[n]='대리점'
-    ra={}
-    for _,r in referrals_df.iterrows():
-        n=str(r.get('추천인','')).strip()
-        if not n or n in ['-','nan']: continue
-        if n not in ra: ra[n]={'추천인':n,'유형':clm.get(n,'케어포'),'추천인코드':r.get('추천인코드',''),'피추천인수':0,'biz':[]}
-        b=str(r.get('피추천인 사업자 번호','')).strip()
-        if b and b not in ['-','nan']: ra[n]['피추천인수']+=1; ra[n]['biz'].append(b)
-    b2u=members.set_index('사업자번호')['아이디'].to_dict(); bs=filtered.groupby('주문자 ID')['판매합계금액'].sum().to_dict()
-    for n in ra: ra[n]['피추천인매출']=sum(bs.get(b2u.get(b,''),0) for b in ra[n]['biz'])
-    return pd.DataFrame(ra.values())[['추천인','유형','추천인코드','피추천인수','피추천인매출']]
+    clm = {}
+    for _, r in referrals_df.iterrows():
+        n = str(r.get('추천인', '')).strip(); g = str(r.get('회원그룹', ''))
+        if not n or n in ['-', 'nan']: continue
+        if g == '영업팀': clm[n] = '케어포' if n == '케어포' else '영업팀'
+        elif g == '대리점 회원': clm[n] = '대리점'
+    ra = {}
+    for _, r in referrals_df.iterrows():
+        n = str(r.get('추천인', '')).strip()
+        if not n or n in ['-', 'nan']: continue
+        if n not in ra: ra[n] = {'추천인': n, '유형': clm.get(n, '케어포'), '추천인코드': r.get('추천인코드', ''), '피추천인수': 0, 'ids': []}
+        login = str(r.get('피추천인 로그인 아이디', '')).strip()
+        if login and login not in ['-', 'nan']: ra[n]['피추천인수'] += 1; ra[n]['ids'].append(login)
+    bs = filtered.groupby('주문자 ID')['판매합계금액'].sum().to_dict()
+    for n in ra: ra[n]['피추천인매출'] = sum(bs.get(uid, 0) for uid in ra[n]['ids'])
+    return pd.DataFrame(ra.values())[['추천인', '유형', '추천인코드', '피추천인수', '피추천인매출']]
 
 def render_referral_count_bar(kp=""):
     st.markdown("#### 추천인 유형별 피추천인 수")
