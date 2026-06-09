@@ -1007,14 +1007,25 @@ def render_product_sales_table(kp=""):
     sp=st.text_input("🔍 상품명/코드 검색",key=f"{kp}_prod_search" if kp else "prod_search_main")
     dp=pa.copy().reset_index(drop=True)
     if sp: dp=dp[dp.apply(lambda r:sp.lower() in str(r).lower(),axis=1)]
-    st.dataframe(dp.style.format({'매출':'{:,.0f}원','수량':'{:,.0f}','주문건수':'{:,.0f}건'}),use_container_width=True,height=450)
+    view_mode=st.radio("표시 방식",["합계","월별"],horizontal=True,key=f"{kp}_prod_view" if kp else "prod_view_main")
+    if view_mode=="합계":
+        st.dataframe(dp.style.format({'매출':'{:,.0f}원','수량':'{:,.0f}','주문건수':'{:,.0f}건'}),use_container_width=True,height=450)
+    else:
+        pivot=filtered.groupby(['상품명','상품 코드','주문월'])['판매합계금액'].sum().reset_index()
+        pivot=pivot.pivot_table(index=['상품명','상품 코드'],columns='주문월',values='판매합계금액',aggfunc='sum',fill_value=0)
+        pivot.columns=[to_ym_kr(c) for c in pivot.columns]
+        pivot['합계']=pivot.sum(axis=1)
+        pivot=pivot.sort_values('합계',ascending=False)
+        if sp: pivot=pivot[pivot.index.get_level_values('상품명').str.contains(sp,case=False,na=False)]
+        st.dataframe(pivot.style.format('{:,.0f}원'),use_container_width=True,height=450)
 
 def render_product_type_cross(kp=""):
-    st.markdown("#### 회원구분별 × 상품 매출 크로스 (TOP 20)")
-    pa=filtered.groupby(['상품명','상품 코드']).agg(매출=('판매합계금액','sum')).reset_index().sort_values('매출',ascending=False)
-    t20n=pa.head(20)['상품명'].tolist()
-    cp=filtered[filtered['상품명'].isin(t20n)].pivot_table(index='상품명',columns='주문자 구분',values='판매합계금액',aggfunc='sum',fill_value=0)
+    st.markdown("#### 회원구분별 × 상품 매출 크로스")
+    cp=filtered.pivot_table(index='상품명',columns='주문자 구분',values='판매합계금액',aggfunc='sum',fill_value=0)
     cp['합계']=cp.sum(axis=1); cp=cp.sort_values('합계',ascending=False)
+    sp=st.text_input("🔍 상품명 검색",key=f"{kp}_cross_search" if kp else "cross_search_main")
+    if sp: cp=cp[cp.index.str.contains(sp,case=False,na=False)]
+    st.caption(f"{len(cp)}개 상품 표시 중")
     st.dataframe(cp.style.format('{:,.0f}원'),use_container_width=True,height=550)
 
 def render_product_monthly_trend(kp=""):
