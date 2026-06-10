@@ -428,6 +428,80 @@ else:
     st.markdown('<div class="main-header"><h1>📊 대상웰라이프 B2B몰 대시보드</h1><p>Sales & Operations Analytics</p></div>', unsafe_allow_html=True)
 
 # ============================================================
+# 공휴일 및 당월 예상 매출 계산
+# ============================================================
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_holidays(year, month):
+    try:
+        url = 'http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo'
+        params = {'serviceKey': st.secrets["DATA_GO_KR_API_KEY"], 'solYear': str(year),
+                  'solMonth': str(month).zfill(2), 'numOfRows': '50', '_type': 'json'}
+        r = requests.get(url, params=params, timeout=5)
+        data = r.json()
+        items = data.get('response', {}).get('body', {}).get('items', {})
+        if not items: return set()
+        item_list = items.get('item', [])
+        if isinstance(item_list, dict): item_list = [item_list]
+        return {str(item['locdate']) for item in item_list}
+    except Exception:
+        return set()
+
+@st.cache_data(show_spinner=False)
+def get_dow_avg(_orders_df, grade_filter=None):
+    """직전 3개월 요일별 일평균 매출 계산 (당월 제외)"""
+    today = pd.Timestamp.now()
+    current_month_start = today.replace(day=1)
+    three_months_ago = current_month_start - pd.DateOffset(months=3)
+    df = _orders_df[(_orders_df['주문일'] >= three_months_ago) &
+                    (_orders_df['주문일'] < current_month_start)].copy()
+    if grade_filter:
+        df = df[df['회원 등급'].isin(grade_filter)]
+    daily = df.groupby(df['주문일'].dt.date)['판매합계금액'].sum().reset_index()
+    daily.columns = ['날짜', '매출']
+    daily['날짜'] = pd.to_datetime(daily['날짜'])
+    daily['요일'] = daily['날짜'].dt.weekday  # 0=월 ~ 6=일
+    return daily.groupby('요일')['매출'].mean().to_dict()
+
+def calc_expected_sales(orders_df, grade_filter=None):
+    """
+    당월 예상 매출 계산 (요일별 가중치 + 공휴일 반영)
+    반환: (현재까지매출, 예상매출, 경과일, 당월총일)
+    """
+    today = pd.Timestamp.now()
+    year, month = today.year, today.month
+    import calendar
+
+    # 공휴일 목록
+    holidays = get_holidays(year, month)
+
+    # 당월 현재까지 실제 매출
+    df = orders_df[(orders_df['주문일'].dt.year == year) &
+                   (orders_df['주문일'].dt.month == month)].copy()
+    if grade_filter:
+        df = df[df['회원 등급'].isin(grade_filter)]
+    current_sales = df['판매합계금액'].sum()
+
+    # 요일별 일평균 (직전 3개월)
+    dow_avg = get_dow_avg(orders_df, grade_filter=tuple(grade_filter) if grade_filter else None)
+
+    # 잔여 날짜 예상 매출 합산
+    total_days = calendar.monthrange(year, month)[1]
+    remaining_sales = 0
+    for day in range(today.day + 1, total_days + 1):
+        d = pd.Timestamp(year, month, day)
+        date_str = f"{year}{str(month).zfill(2)}{str(day).zfill(2)}"
+        dow = d.weekday()
+        # 주말이나 공휴일은 요일별 평균 그대로, 평일 공휴일은 토요일 평균으로 대체
+        if date_str in holidays and dow < 5:
+            avg = dow_avg.get(5, 0)  # 공휴일은 토요일 평균으로 대체
+        else:
+            avg = dow_avg.get(dow, 0)
+        remaining_sales += avg
+
+    expected = current_sales + remaining_sales
+    return current_sales, expected, today.day, total_days
+
+# ============================================================
 # 세그먼트 집계 함수
 # ============================================================
 @st.cache_data(show_spinner="🔬 세그먼트 집계 중...")
@@ -1694,8 +1768,9 @@ tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10,tab11 = st.tabs([
 with tab1:
     ts=filtered['판매합계금액'].sum(); to_=filtered['주문 ID'].nunique(); tb=filtered['주문자 ID'].nunique()
     tm=len(members); nm=len(filtered_members); ao=ts/to_ if to_>0 else 0
-    cols=st.columns(6)
-    for col,(l,v,u) in zip(cols,[("총 매출액",fmt_krw_short(ts),"원"),("총 주문건수",fmt_num(to_),"건"),("총 회원수",fmt_num(tm),"처"),("주문회원수",fmt_num(tb),"처"),("신규 가입회원",fmt_num(nm),"처"),("객단가",fmt_krw_short(ao),"원")]):
+    _, expected_total, elapsed_bd, total_bd = calc_expected_sales(orders)
+    cols=st.columns(7)
+    for col,(l,v,u) in zip(cols,[("총 매출액",fmt_krw_short(ts),"원"),("총 주문건수",fmt_num(to_),"건"),("총 회원수",fmt_num(tm),"처"),("주문회원수",fmt_num(tb),"처"),("신규 가입회원",fmt_num(nm),"처"),("객단가",fmt_krw_short(ao),"원"),(f"당월 예상매출 ({elapsed_bd}/{total_bd}일)",fmt_krw_short(expected_total),"원"),]):
         col.markdown(kpi_card(l,v,u),unsafe_allow_html=True)
     render_monthly_sales_trend()
     cl,cr=st.columns(2)
@@ -1707,6 +1782,18 @@ with tab1:
 # Tab 2. 매출 분석
 # ============================================================
 with tab2:
+    # ── 당월 예상 매출 섹션 ──
+    st.markdown("#### 📅 당월 예상 매출")
+    cfg = ['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
+    cur_total, exp_total, elapsed_bd, total_bd = calc_expected_sales(orders)
+    cur_cf, exp_cf, _, _ = calc_expected_sales(orders, grade_filter=cfg)
+    st.caption(f"기준: {pd.Timestamp.now().day}일까지 실적 + 잔여일 예상 | 직전 3개월 요일별 일평균 적용 | 공휴일은 토요일 평균으로 대체")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(kpi_card("당월 현재 매출(전체)", fmt_krw_short(cur_total), "원"), unsafe_allow_html=True)
+    c2.markdown(kpi_card(f"당월 예상 매출(전체)", fmt_krw_short(exp_total), "원"), unsafe_allow_html=True)
+    c3.markdown(kpi_card("당월 현재 매출(케어포)", fmt_krw_short(cur_cf), "원"), unsafe_allow_html=True)
+    c4.markdown(kpi_card("당월 예상 매출(케어포)", fmt_krw_short(exp_cf), "원"), unsafe_allow_html=True)
+    st.markdown("---")
     render_type_monthly_sales()
     render_grade_sales_bar()
     render_heatmap_dow_hour()
