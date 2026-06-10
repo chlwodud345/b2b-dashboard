@@ -467,7 +467,7 @@ def calc_expected_sales(orders_df, grade_filter=None):
     당월 예상 매출 계산 (요일별 가중치 + 공휴일 반영)
     반환: (현재까지매출, 예상매출, 경과일, 당월총일)
     """
-    today = pd.Timestamp.now()
+    today = orders_df['주문일'].max().normalize()
     year, month = today.year, today.month
     import calendar
 
@@ -1787,7 +1787,7 @@ with tab2:
     cfg = ['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
     cur_total, exp_total, elapsed_bd, total_bd = calc_expected_sales(orders)
     cur_cf, exp_cf, _, _ = calc_expected_sales(orders, grade_filter=cfg)
-    st.caption(f"기준: {pd.Timestamp.now().day}일까지 실적 + 잔여일 예상 | 직전 3개월 요일별 일평균 적용 | 공휴일은 토요일 평균으로 대체")
+    st.caption(f"기준: {orders['주문일'].max().day}일까지 실적 + 잔여일 예상 | 직전 3개월 요일별 일평균 적용 | 공휴일은 토요일 평균으로 대체")
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(kpi_card("당월 현재 매출(전체)", fmt_krw_short(cur_total), "원"), unsafe_allow_html=True)
     c2.markdown(kpi_card(f"당월 예상 매출(전체)", fmt_krw_short(exp_total), "원"), unsafe_allow_html=True)
