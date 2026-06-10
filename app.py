@@ -1783,7 +1783,7 @@ with tab1:
 # ============================================================
 with tab2:
     # ── 당월 예상 매출 섹션 ──
-    st.markdown("#### 📅 당월 예상 매출")
+    st.markdown("#### 당월 예상 매출")
     cfg = ['케어포-시설','케어포-공생','케어포-주야간','케어포-방문','케어포-일반','케어포-종사자','케어포-보호자']
     cur_total, exp_total, elapsed_bd, total_bd = calc_expected_sales(orders)
     cur_cf, exp_cf, _, _ = calc_expected_sales(orders, grade_filter=cfg)
