@@ -63,7 +63,6 @@ html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
 .js-plotly-plot .plotly .hoverlayer .hovertext text { font-size: 22px !important; }
 .js-plotly-plot .plotly .hoverlayer .hovertext path { stroke-width: 2px !important; }
 div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px; }
-button[kind="header"] svg { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1028,7 +1027,11 @@ def render_daily_sales_trend(kp=""):
     tvals2,ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"daily_sales"))
-    with st.expander("📋 일별 매출 테이블 보기"):
+    if f"{kp}_daily_expand" not in st.session_state:
+        st.session_state[f"{kp}_daily_expand"] = False
+    if st.button("📋 매출 테이블 보기", key=f"{kp}_daily_btn" if kp else "daily_btn_main"):
+        st.session_state[f"{kp}_daily_expand"] = not st.session_state[f"{kp}_daily_expand"]
+    if st.session_state[f"{kp}_daily_expand"]:
         view_mode = st.radio("표시 방식", ["일별", "월별"], horizontal=True,
             key=f"{kp}_daily_view" if kp else "daily_view_main")
         if view_mode == "일별":
