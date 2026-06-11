@@ -63,7 +63,7 @@ html, body, [class*="st-"] { font-family: 'Noto Sans KR', sans-serif; }
 .js-plotly-plot .plotly .hoverlayer .hovertext text { font-size: 22px !important; }
 .js-plotly-plot .plotly .hoverlayer .hovertext path { stroke-width: 2px !important; }
 div[data-testid="stVerticalBlock"] > div { padding-top: 4px; padding-bottom: 4px; }
-[data-testid="stExpanderToggleIcon"] { display: none; }
+button[kind="header"] svg { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
