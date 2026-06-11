@@ -1027,6 +1027,15 @@ def render_daily_sales_trend(kp=""):
     tvals2,ttexts2 = krw_tickvals(daily['매출'])
     fig.update_layout(height=400,margin=dict(l=80,r=30,t=30,b=60),showlegend=False,xaxis=dict(title='날짜',tickfont=dict(size=11),tickformat='%Y년 %m월'),yaxis=dict(title='매출액',tickvals=tvals2,ticktext=ttexts2,tickfont=dict(size=11)))
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"daily_sales"))
+    with st.expander("📋 일별 매출 테이블 보기"):
+        daily_tbl = daily.copy().sort_values('날짜', ascending=False).reset_index(drop=True)
+        daily_tbl['날짜_kr'] = daily_tbl['날짜'].apply(to_date_kr)
+        daily_tbl['요일'] = pd.to_datetime(daily_tbl['날짜']).dt.day_name().map(
+            {'Monday':'월','Tuesday':'화','Wednesday':'수','Thursday':'목',
+             'Friday':'금','Saturday':'토','Sunday':'일'})
+        daily_tbl = daily_tbl[['날짜_kr','요일','매출']]
+        daily_tbl.columns = ['날짜','요일','매출']
+        st.dataframe(daily_tbl.style.format({'매출':'{:,.0f}원'}),use_container_width=True,height=400)
 
 def render_type_monthly_sales(kp=""):
     st.markdown("#### 회원구분별 × 월별 매출 추이")
