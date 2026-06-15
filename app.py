@@ -2021,8 +2021,8 @@ with tab5:
     fmt_dict.update({c:'{:,.0f}원' for c in month_cols})
     st.dataframe(combined[display_cols].style.format(fmt_dict), use_container_width=True, height=400)
 
-    # ── ② 추천인 선택 → 회원등급별 월별 상세 ──
-    st.markdown("#### 추천인별 회원등급 × 월별 매출 상세")
+    # ── ② 추천인 선택 → 기관구분/기관유형별 월별 상세 ──
+    st.markdown("#### 추천인별 기관구분 × 기관유형 × 월별 매출 상세")
     sel_ref = st.selectbox("추천인 선택", ['선택 안 함'] + dr['추천인'].tolist(), key="ref_grade_sel")
     if sel_ref != '선택 안 함':
         ref_ids = ref_id_map.get(sel_ref, [])
@@ -2033,15 +2033,34 @@ with tab5:
             if ref_orders.empty:
                 st.info("주문 데이터가 없습니다.")
             else:
-                id_to_grade = members.set_index('아이디')['회원등급'].to_dict()
-                ref_orders['회원등급'] = ref_orders['주문자 ID'].map(id_to_grade)
-                pivot = ref_orders.groupby(['회원등급','주문월'])['판매합계금액'].sum().reset_index()
-                pivot = pivot.pivot_table(index='회원등급', columns='주문월',
+                # 기관구분, 기관유형 매핑
+                id_to_seg = members.set_index('아이디')[['기관구분','기관유형']].to_dict('index')
+                ref_orders['기관구분'] = ref_orders['주문자 ID'].map(lambda x: id_to_seg.get(x, {}).get('기관구분', '미분류'))
+                ref_orders['기관유형'] = ref_orders['주문자 ID'].map(lambda x: id_to_seg.get(x, {}).get('기관유형', '미분류'))
+
+                # 기관구분 × 기관유형 필터
+                c1, c2 = st.columns(2)
+                with c1:
+                    seg_opts = ['전체'] + sorted(ref_orders['기관구분'].dropna().unique().tolist())
+                    sel_seg = st.selectbox("기관구분 필터", seg_opts, key="ref_seg_filter")
+                with c2:
+                    if sel_seg != '전체':
+                        type_opts = ['전체'] + sorted(ref_orders[ref_orders['기관구분']==sel_seg]['기관유형'].dropna().unique().tolist())
+                    else:
+                        type_opts = ['전체'] + sorted(ref_orders['기관유형'].dropna().unique().tolist())
+                    sel_type = st.selectbox("기관유형 필터", type_opts, key="ref_type_filter")
+
+                if sel_seg != '전체': ref_orders = ref_orders[ref_orders['기관구분'] == sel_seg]
+                if sel_type != '전체': ref_orders = ref_orders[ref_orders['기관유형'] == sel_type]
+
+                # 기관구분 × 기관유형 × 월별 피벗
+                pivot = ref_orders.groupby(['기관구분','기관유형','주문월'])['판매합계금액'].sum().reset_index()
+                pivot = pivot.pivot_table(index=['기관구분','기관유형'], columns='주문월',
                                           values='판매합계금액', aggfunc='sum', fill_value=0)
                 pivot.columns = [to_ym_kr(c) for c in pivot.columns]
                 pivot['합계'] = pivot.sum(axis=1)
                 pivot = pivot.sort_values('합계', ascending=False)
-                pivot.loc['합계'] = pivot.sum()
+                pivot.loc[('합계','')] = pivot.sum()
                 month_cols2 = [c for c in pivot.columns if c != '합계']
                 st.caption(f"{sel_ref} 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
                 st.dataframe(pivot[month_cols2+['합계']].style.format('{:,.0f}원'),
