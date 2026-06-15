@@ -2058,6 +2058,7 @@ with tab5:
                 pivot = pivot.pivot_table(index=['기관구분','기관유형'], columns='주문월',
                                           values='판매합계금액', aggfunc='sum', fill_value=0)
                 pivot.columns = [to_ym_kr(c) for c in pivot.columns]
+                pivot.columns.name = None
                 pivot['합계'] = pivot.sum(axis=1)
                 pivot = pivot.sort_values('합계', ascending=False)
                 pivot.loc[('합계','')] = pivot.sum(numeric_only=True)
