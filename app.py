@@ -2061,8 +2061,12 @@ with tab5:
                 pivot.columns.name = None
                 pivot['합계'] = pivot.sum(axis=1)
                 pivot = pivot.sort_values('합계', ascending=False)
-                pivot.loc[('합계','')] = pivot.sum(numeric_only=True)
                 month_cols2 = [c for c in pivot.columns if c != '합계']
+                pivot = pivot.reset_index()
+                pivot['기관구분'] = pivot['기관구분'].astype(str); pivot['기관유형'] = pivot['기관유형'].astype(str)
+                total_row = {c: pivot[c].sum() for c in month_cols2+['합계']}; total_row['기관구분'] = '합계'; total_row['기관유형'] = ''
+                pivot = pd.concat([pivot, pd.DataFrame([total_row])], ignore_index=True)
+                pivot = pivot.set_index(['기관구분','기관유형'])
                 st.caption(f"{sel_ref} 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
                 st.dataframe(pivot[month_cols2+['합계']].style.format('{:,.0f}원'),
                              use_container_width=True, height=400)
