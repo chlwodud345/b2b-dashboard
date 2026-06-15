@@ -1336,30 +1336,6 @@ def render_referral_table(kp=""):
         st.dataframe(pivot[col_order].style.format('{:,.0f}원'),
                      use_container_width=True, height=400)
 
-def render_referral_grade_monthly(kp=""):
-    st.markdown("#### 추천인별 회원등급 × 월별 매출")
-    referrer_opts = ['선택 안 함'] + _build_referral_data()['추천인'].tolist()
-    sel_ref = st.selectbox("추천인 선택", referrer_opts,
-        key=f"{kp}_ref_sel" if kp else "ref_sel_main")
-    if sel_ref != '선택 안 함':
-        ref_rows = referrals_df[referrals_df['추천인'] == sel_ref].copy()
-        ref_rows['피추천인 로그인 아이디'] = ref_rows['피추천인 로그인 아이디'].astype(str).str.strip()
-        ref_ids = ref_rows[~ref_rows['피추천인 로그인 아이디'].isin(['-','nan',''])]['피추천인 로그인 아이디'].tolist()
-        if not ref_ids: st.info("피추천인 데이터가 없습니다."); return
-        ref_orders = filtered[filtered['주문자 ID'].isin(ref_ids)].copy()
-        if ref_orders.empty: st.info("주문 데이터가 없습니다."); return
-        id_to_grade = members.set_index('아이디')['회원등급'].to_dict()
-        ref_orders['회원등급'] = ref_orders['주문자 ID'].map(id_to_grade)
-        pivot = ref_orders.groupby(['회원등급','주문월'])['판매합계금액'].sum().reset_index()
-        pivot = pivot.pivot_table(index='회원등급', columns='주문월', values='판매합계금액', aggfunc='sum', fill_value=0)
-        pivot.columns = [to_ym_kr(c) for c in pivot.columns]
-        pivot['합계'] = pivot.sum(axis=1)
-        pivot = pivot.sort_values('합계', ascending=False)
-        pivot.loc['합계'] = pivot.sum()
-        month_cols = [c for c in pivot.columns if c != '합계']
-        st.caption(f"{sel_ref} 추천인 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
-        st.dataframe(pivot[month_cols + ['합계']].style.format('{:,.0f}원'), use_container_width=True, height=400)
-
 def render_dealer_commission(kp=""):
     st.markdown("#### 대리점 피추천인 매출 및 판매수수료 집계")
     st.caption("구매확정일자 기준 · 전월 26일~당월 25일 · 상품별 수수료율 적용")
@@ -2012,9 +1988,31 @@ with tab5:
     dr=dr.sort_values('피추천인매출',ascending=False).reset_index(drop=True)
     sr=st.text_input("🔍 추천인 검색",key="ref_search")
     if sr: dr=dr[dr.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
-    st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=550)
-    render_referral_grade_monthly()
-    # ── 대리점 판매수수료 집계 ──
+    st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=400)
+    # ── 추천인 선택 → 회원등급 × 월별 매출 ──
+    sel_ref = st.selectbox("추천인 선택 시 회원등급 × 월별 매출 표시", ['선택 안 함'] + dr['추천인'].tolist(), key="ref_grade_sel")
+    if sel_ref != '선택 안 함':
+        ref_rows = referrals_df[referrals_df['추천인'] == sel_ref].copy()
+        ref_rows['피추천인 로그인 아이디'] = ref_rows['피추천인 로그인 아이디'].astype(str).str.strip()
+        ref_ids = ref_rows[~ref_rows['피추천인 로그인 아이디'].isin(['-','nan',''])]['피추천인 로그인 아이디'].tolist()
+        if not ref_ids:
+            st.info("피추천인 데이터가 없습니다.")
+        else:
+            ref_orders = filtered[filtered['주문자 ID'].isin(ref_ids)].copy()
+            if ref_orders.empty:
+                st.info("주문 데이터가 없습니다.")
+            else:
+                id_to_grade = members.set_index('아이디')['회원등급'].to_dict()
+                ref_orders['회원등급'] = ref_orders['주문자 ID'].map(id_to_grade)
+                pivot = ref_orders.groupby(['회원등급','주문월'])['판매합계금액'].sum().reset_index()
+                pivot = pivot.pivot_table(index='회원등급', columns='주문월', values='판매합계금액', aggfunc='sum', fill_value=0)
+                pivot.columns = [to_ym_kr(c) for c in pivot.columns]
+                pivot['합계'] = pivot.sum(axis=1)
+                pivot = pivot.sort_values('합계', ascending=False)
+                pivot.loc['합계'] = pivot.sum()
+                month_cols = [c for c in pivot.columns if c != '합계']
+                st.caption(f"{sel_ref} 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
+                st.dataframe(pivot[month_cols+['합계']].style.format('{:,.0f}원'), use_container_width=True, height=400)
     st.markdown("---")
     render_dealer_commission()
     st.markdown("---")
