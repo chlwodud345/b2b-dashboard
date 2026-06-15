@@ -1982,19 +1982,50 @@ with tab5:
     cl,cr=st.columns(2)
     with cl: render_referral_count_bar()
     with cr: render_referral_sales_donut()
+
     st.markdown("#### 추천인별 현황")
     rtf=st.selectbox("추천인 유형 필터",["전체","영업팀","대리점","케어포"],key="ref_type"); dr=rdf.copy()
     if rtf!="전체": dr=dr[dr['유형']==rtf]
     dr=dr.sort_values('피추천인매출',ascending=False).reset_index(drop=True)
     sr=st.text_input("🔍 추천인 검색",key="ref_search")
     if sr: dr=dr[dr.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
-    st.dataframe(dr.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=400)
-    # ── 추천인 선택 → 회원등급 × 월별 매출 ──
-    sel_ref = st.selectbox("추천인 선택 시 회원등급 × 월별 매출 표시", ['선택 안 함'] + dr['추천인'].tolist(), key="ref_grade_sel")
+
+    # ── ① 추천인별 현황 + 월별 매출 통합 테이블 ──
+    # 추천인별 피추천인 아이디 목록
+    ref_id_map = {}
+    for _, row in referrals_df.iterrows():
+        n = str(row.get('추천인','')).strip()
+        login = str(row.get('피추천인 로그인 아이디','')).strip()
+        if not n or n in ['-','nan']: continue
+        if login and login not in ['-','nan']:
+            ref_id_map.setdefault(n, []).append(login)
+
+    # 추천인별 월별 매출 피벗
+    all_ref_orders = filtered[filtered['주문자 ID'].isin(
+        [uid for ids in ref_id_map.values() for uid in ids])].copy()
+    id_to_ref = {uid: n for n, ids in ref_id_map.items() for uid in ids}
+    all_ref_orders['추천인'] = all_ref_orders['주문자 ID'].map(id_to_ref)
+    ref_monthly = all_ref_orders.groupby(['추천인','주문월'])['판매합계금액'].sum().reset_index()
+    ref_monthly_pivot = ref_monthly.pivot_table(
+        index='추천인', columns='주문월', values='판매합계금액', aggfunc='sum', fill_value=0)
+    ref_monthly_pivot.columns = [to_ym_kr(c) for c in ref_monthly_pivot.columns]
+
+    # 기본 테이블과 월별 피벗 합치기
+    dr_indexed = dr.set_index('추천인')
+    combined = dr_indexed.join(ref_monthly_pivot, how='left').fillna(0)
+    combined = combined.reset_index()
+    month_cols = [c for c in ref_monthly_pivot.columns]
+    display_cols = ['추천인','유형','추천인코드','피추천인수','피추천인매출'] + month_cols
+    display_cols = [c for c in display_cols if c in combined.columns]
+    fmt_dict = {'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}
+    fmt_dict.update({c:'{:,.0f}원' for c in month_cols})
+    st.dataframe(combined[display_cols].style.format(fmt_dict), use_container_width=True, height=400)
+
+    # ── ② 추천인 선택 → 회원등급별 월별 상세 ──
+    st.markdown("#### 추천인별 회원등급 × 월별 매출 상세")
+    sel_ref = st.selectbox("추천인 선택", ['선택 안 함'] + dr['추천인'].tolist(), key="ref_grade_sel")
     if sel_ref != '선택 안 함':
-        ref_rows = referrals_df[referrals_df['추천인'] == sel_ref].copy()
-        ref_rows['피추천인 로그인 아이디'] = ref_rows['피추천인 로그인 아이디'].astype(str).str.strip()
-        ref_ids = ref_rows[~ref_rows['피추천인 로그인 아이디'].isin(['-','nan',''])]['피추천인 로그인 아이디'].tolist()
+        ref_ids = ref_id_map.get(sel_ref, [])
         if not ref_ids:
             st.info("피추천인 데이터가 없습니다.")
         else:
@@ -2005,14 +2036,17 @@ with tab5:
                 id_to_grade = members.set_index('아이디')['회원등급'].to_dict()
                 ref_orders['회원등급'] = ref_orders['주문자 ID'].map(id_to_grade)
                 pivot = ref_orders.groupby(['회원등급','주문월'])['판매합계금액'].sum().reset_index()
-                pivot = pivot.pivot_table(index='회원등급', columns='주문월', values='판매합계금액', aggfunc='sum', fill_value=0)
+                pivot = pivot.pivot_table(index='회원등급', columns='주문월',
+                                          values='판매합계금액', aggfunc='sum', fill_value=0)
                 pivot.columns = [to_ym_kr(c) for c in pivot.columns]
                 pivot['합계'] = pivot.sum(axis=1)
                 pivot = pivot.sort_values('합계', ascending=False)
                 pivot.loc['합계'] = pivot.sum()
-                month_cols = [c for c in pivot.columns if c != '합계']
+                month_cols2 = [c for c in pivot.columns if c != '합계']
                 st.caption(f"{sel_ref} 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
-                st.dataframe(pivot[month_cols+['합계']].style.format('{:,.0f}원'), use_container_width=True, height=400)
+                st.dataframe(pivot[month_cols2+['합계']].style.format('{:,.0f}원'),
+                             use_container_width=True, height=400)
+
     st.markdown("---")
     render_dealer_commission()
     st.markdown("---")
