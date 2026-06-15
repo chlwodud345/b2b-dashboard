@@ -1327,7 +1327,7 @@ def render_referral_table(kp=""):
         pivot.columns = [to_ym_kr(c) for c in pivot.columns]
         pivot['합계'] = pivot.sum(axis=1)
         pivot = pivot.sort_values('합계', ascending=False)
-        pivot.loc['합계'] = pivot.sum()
+        pivot.loc[('합계','')] = pivot.sum(numeric_only=True)
 
         month_cols = [c for c in pivot.columns if c != '합계']
         col_order = month_cols + ['합계']
