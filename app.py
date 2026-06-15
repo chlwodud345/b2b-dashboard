@@ -1327,7 +1327,7 @@ def render_referral_table(kp=""):
         pivot.columns = [to_ym_kr(c) for c in pivot.columns]
         pivot['합계'] = pivot.sum(axis=1)
         pivot = pivot.sort_values('합계', ascending=False)
-        pivot.loc['합계'] = pivot.sum(numeric_only=True)
+        pivot.loc['합계'] = pivot.sum()
 
         month_cols = [c for c in pivot.columns if c != '합계']
         col_order = month_cols + ['합계']
@@ -2060,7 +2060,7 @@ with tab5:
                 pivot.columns = [to_ym_kr(c) for c in pivot.columns]
                 pivot['합계'] = pivot.sum(axis=1)
                 pivot = pivot.sort_values('합계', ascending=False)
-                pivot.loc[('합계','')] = pivot.sum()
+                pivot.loc[('합계','')] = pivot.sum(numeric_only=True)
                 month_cols2 = [c for c in pivot.columns if c != '합계']
                 st.caption(f"{sel_ref} 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
                 st.dataframe(pivot[month_cols2+['합계']].style.format('{:,.0f}원'),
