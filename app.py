@@ -1294,26 +1294,32 @@ def render_referral_table(kp=""):
     sr=st.text_input("🔍 추천인 검색",key=f"{kp}_ref_table_search" if kp else "ref_table_search_main")
     if sr: rdf_local=rdf_local[rdf_local.apply(lambda r:sr.lower() in str(r).lower(),axis=1)]
     st.dataframe(rdf_local.style.format({'피추천인수':'{:,.0f}','피추천인매출':'{:,.0f}원'}),use_container_width=True,height=400)
+
     st.markdown("#### 추천인별 회원등급 × 월별 매출")
     referrer_opts = ['선택 안 함'] + rdf_local['추천인'].tolist()
     sel_ref = st.selectbox("추천인 선택", referrer_opts,
         key=f"{kp}_ref_sel" if kp else "ref_sel_main")
+
     if sel_ref != '선택 안 함':
         # 해당 추천인의 피추천인 로그인 아이디 목록
         ref_rows = referrals_df[referrals_df['추천인'] == sel_ref].copy()
         ref_rows['피추천인 로그인 아이디'] = ref_rows['피추천인 로그인 아이디'].astype(str).str.strip()
         ref_ids = ref_rows[~ref_rows['피추천인 로그인 아이디'].isin(['-','nan',''])]['피추천인 로그인 아이디'].tolist()
+
         if not ref_ids:
             st.info("피추천인 데이터가 없습니다.")
             return
+
         # 피추천인 주문 데이터
         ref_orders = filtered[filtered['주문자 ID'].isin(ref_ids)].copy()
         if ref_orders.empty:
             st.info("주문 데이터가 없습니다.")
             return
+
         # 회원등급 매핑
         id_to_grade = members.set_index('아이디')['회원등급'].to_dict()
         ref_orders['회원등급'] = ref_orders['주문자 ID'].map(id_to_grade)
+
         # 회원등급 × 월별 피벗
         pivot = ref_orders.groupby(['회원등급','주문월'])['판매합계금액'].sum().reset_index()
         pivot = pivot.pivot_table(index='회원등급', columns='주문월',
@@ -1322,8 +1328,10 @@ def render_referral_table(kp=""):
         pivot['합계'] = pivot.sum(axis=1)
         pivot = pivot.sort_values('합계', ascending=False)
         pivot.loc['합계'] = pivot.sum()
+
         month_cols = [c for c in pivot.columns if c != '합계']
         col_order = month_cols + ['합계']
+
         st.caption(f"{sel_ref} 추천인 피추천인 수: {len(ref_ids)}명 | 주문 발생: {ref_orders['주문자 ID'].nunique()}명")
         st.dataframe(pivot[col_order].style.format('{:,.0f}원'),
                      use_container_width=True, height=400)
