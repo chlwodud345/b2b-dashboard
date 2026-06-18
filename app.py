@@ -381,7 +381,7 @@ try:
     sidebar_msg = f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건"
     if len(bw_data) > 0: sidebar_msg += f"\n- BW손익: {len(bw_data):,}건"
     st.sidebar.success(sidebar_msg)
-    st.sidebar.markdown(f"""<div style="background:#E6F1FB;border:1px solid #B5D4F4;border-radius:8px;padding:8px 12px;font-size:0.8rem;font-weight:600;color:#185FA5;margin-top:4px;">📅 데이터 기준: {to_date_kr(orders['주문일'].max().strftime('%Y-%m-%d'))}</div>""", unsafe_allow_html=True)
+    st.sidebar.markdown(f"""<div style="background:#E6F1FB;border:1px solid #B5D4F4;border-radius:8px;padding:8px 12px;font-size:0.8rem;font-weight:600;color:#185FA5;margin-top:-8px;">📅 데이터 기준: {to_date_kr(orders['주문일'].max().strftime('%Y-%m-%d'))}</div>""", unsafe_allow_html=True)
 except Exception as e:
     st.error(f"❌ 데이터 로드 실패: {str(e)}"); st.stop()
 if st.sidebar.button("🔄 데이터 새로고침"):
