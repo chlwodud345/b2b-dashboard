@@ -381,6 +381,7 @@ try:
     sidebar_msg = f"✅ 데이터 로드 완료\n- 주문: {len(orders):,}건\n- 회원: {len(members):,}건\n- 추천인: {len(referrals_df):,}건"
     if len(bw_data) > 0: sidebar_msg += f"\n- BW손익: {len(bw_data):,}건"
     st.sidebar.success(sidebar_msg)
+    st.sidebar.caption(f"📅 데이터 기준: {to_date_kr(orders['주문일'].max().strftime('%Y-%m-%d'))}")
 except Exception as e:
     st.error(f"❌ 데이터 로드 실패: {str(e)}"); st.stop()
 if st.sidebar.button("🔄 데이터 새로고침"):
@@ -2339,4 +2340,4 @@ with tab11:
 # 푸터
 # ============================================================
 st.markdown("---")
-st.markdown(f"<p style='text-align:center;color:#94a3b8;font-size:0.85rem;'>© 대상웰라이프 B2B몰 대시보드 · 데이터 기준: {pd.Timestamp.now().strftime('%Y년 %m월 %d일')}</p>",unsafe_allow_html=True)
+st.markdown(f"<p style='text-align:center;color:#94a3b8;font-size:0.85rem;'>© 대상웰라이프 B2B몰 대시보드 · 데이터 기준: {to_date_kr(orders['주문일'].max().strftime('%Y-%m-%d'))}</p>",unsafe_allow_html=True)
