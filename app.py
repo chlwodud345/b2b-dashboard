@@ -1068,6 +1068,21 @@ def render_grade_sales_bar(kp=""):
     fig.update_layout(height=max(420,len(gs)*35+140),margin=dict(l=140,r=100,t=30,b=40),showlegend=False)
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"grade_sales"))
 
+def render_grade_monthly_buyers(kp=""):
+    st.markdown("#### 회원등급별 × 월별 구매처 수")
+    st.caption("각 월에 주문한 고유 거래처 수 (매월 독립 집계)")
+    g = filtered.groupby(['회원 등급','주문월'])['주문자 ID'].nunique().reset_index(name='구매처수')
+    pivot = g.pivot_table(index='회원 등급', columns='주문월', values='구매처수', aggfunc='sum', fill_value=0)
+    pivot.columns = [to_ym_kr(c) for c in pivot.columns]
+    pivot.columns.name = None
+    month_cols = list(pivot.columns)
+    pivot['합계'] = pivot[month_cols].sum(axis=1)
+    pivot = pivot.sort_values('합계', ascending=False)
+    pivot.loc['합계'] = {c: pivot[c].sum() for c in month_cols+['합계']}
+    sr = st.text_input("🔍 회원등급 검색", key=f"{kp}_gmb_search" if kp else "gmb_search_main")
+    if sr: pivot = pivot[pivot.index.str.contains(sr, case=False, na=False) | (pivot.index=='합계')]
+    st.dataframe(pivot[month_cols+['합계']].style.format('{:,.0f}처'), use_container_width=True, height=450)
+
 def render_heatmap_dow_hour(kp=""):
     st.markdown("#### 요일 · 시간대별 주문 매출 히트맵")
     dow_order = ['월','화','수','목','금','토','일']
@@ -1834,6 +1849,7 @@ CHART_REGISTRY = {
     "C42":{"name":"🔄 세그먼트 재구매 주기 분포","tab":"세그먼트 분석","fn": lambda kp="": render_seg_cycle_dist(_seg_df_cache, kp)},
     "C43":{"name":"⚠️ 세그먼트 이탈위험비율","tab":"세그먼트 분석","fn": lambda kp="": render_seg_churn(_seg_df_cache, kp)},
     "C44":{"name":"🗺️ 세그먼트 기초지표 히트맵","tab":"세그먼트 분석","fn": lambda kp="": render_seg_heatmap(_seg_df_cache, kp)},
+    "C45":{"name":"🏬 회원등급별×월별 구매처 수","tab":"회원 분석","fn":render_grade_monthly_buyers},
 }
 
 # ============================================================
@@ -1928,6 +1944,7 @@ with tab4:
             st.dataframe(result.style.format({'총매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=400)
     render_new_member_trend()
     render_grade_member_bar()
+    render_grade_monthly_buyers()
     cl,cr=st.columns(2)
     with cl: render_first_order_days()
     with cr: render_order_count_dist()
