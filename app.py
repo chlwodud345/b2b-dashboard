@@ -1110,9 +1110,13 @@ def render_org_sales_table(kp=""):
     search=st.text_input("🔍 검색 (아이디, 상호명)",key=f"{kp}_org_search" if kp else "org_search_main")
     view_mode=st.radio("표시 방식",["합계","월별"],horizontal=True,key=f"{kp}_org_view" if kp else "org_view_main")
     if view_mode=="합계":
-        ba=ba[['주문자 ID','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
-        if search: ba=ba[ba.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
-        st.dataframe(ba.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
+        agg=filtered.groupby('주문자 ID').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),최근주문일=('주문일자','max')).reset_index()
+        agg['객단가']=(agg['매출']/agg['주문건수']).round(0)
+        info=ba.sort_values('매출',ascending=False).drop_duplicates('주문자 ID').set_index('주문자 ID')[['상호명','주문자 구분','회원 등급']]
+        agg=agg.join(info,on='주문자 ID')
+        agg=agg[['주문자 ID','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
+        if search: agg=agg[agg.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
+        st.dataframe(agg.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
     else:
         pivot=filtered.groupby(['주문자 ID','주문월'])['판매합계금액'].sum().reset_index()
         pivot=pivot.pivot_table(index='주문자 ID',columns='주문월',values='판매합계금액',aggfunc='sum',fill_value=0)
