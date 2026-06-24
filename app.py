@@ -1128,8 +1128,8 @@ def render_org_sales_table(kp=""):
         cols_order=['상호명','주문자명','주문자 구분','회원 등급']+month_cols+['합계']
         pivot=pivot[cols_order]
         if search: pivot=pivot[pivot.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
+        for c in month_cols+['합계']: pivot[c]=pd.to_numeric(pivot[c],errors='coerce').fillna(0)
         st.caption(f"{len(pivot):,}개 기관 표시 중")
-        st.write("DEBUG 컬럼:", list(pivot.columns))
         st.dataframe(pivot.style.format({c:'{:,.0f}원' for c in month_cols+['합계']}),use_container_width=True,height=550)
 
 def render_product_pareto(kp=""):
