@@ -1129,6 +1129,7 @@ def render_org_sales_table(kp=""):
         pivot=pivot[cols_order]
         if search: pivot=pivot[pivot.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
         st.caption(f"{len(pivot):,}개 기관 표시 중")
+        st.write("DEBUG 컬럼:", list(pivot.columns))
         st.dataframe(pivot.style.format({c:'{:,.0f}원' for c in month_cols+['합계']}),use_container_width=True,height=550)
 
 def render_product_pareto(kp=""):
