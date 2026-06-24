@@ -1123,9 +1123,10 @@ def render_org_sales_table(kp=""):
         month_cols=list(pivot.columns)
         pivot['합계']=pivot[month_cols].sum(axis=1)
         pivot=pivot.sort_values('합계',ascending=False)
-        id_info=ba.set_index('주문자 ID')[['상호명','주문자 구분','회원 등급']]
+        id_info=ba.sort_values('매출',ascending=False).drop_duplicates('주문자 ID').set_index('주문자 ID')[['상호명','주문자 구분','회원 등급']]
         pivot=pivot.join(id_info,how='left')
-        cols_order=['상호명','주문자 구분','회원 등급']+month_cols+['합계']
+        pivot=pivot.reset_index()
+        cols_order=['주문자 ID','상호명','주문자 구분','회원 등급']+month_cols+['합계']
         pivot=pivot[cols_order]
         if search: pivot=pivot[pivot.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
         for c in month_cols+['합계']: pivot[c]=pd.to_numeric(pivot[c],errors='coerce').fillna(0)
