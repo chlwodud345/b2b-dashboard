@@ -1107,10 +1107,10 @@ def render_org_sales_table(kp=""):
     ).reset_index()
     ba['객단가']=(ba['매출']/ba['주문건수']).round(0)
     ba['상호명']=ba['주문자 ID'].map(lambda x:member_lookup.get(x,{}).get('상호명',''))
-    search=st.text_input("🔍 검색 (아이디, 주문자명, 상호명)",key=f"{kp}_org_search" if kp else "org_search_main")
+    search=st.text_input("🔍 검색 (아이디, 상호명)",key=f"{kp}_org_search" if kp else "org_search_main")
     view_mode=st.radio("표시 방식",["합계","월별"],horizontal=True,key=f"{kp}_org_view" if kp else "org_view_main")
     if view_mode=="합계":
-        ba=ba[['주문자 ID','주문자명','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
+        ba=ba[['주문자 ID','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
         if search: ba=ba[ba.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
         st.dataframe(ba.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
     else:
@@ -1123,15 +1123,16 @@ def render_org_sales_table(kp=""):
         month_cols=list(pivot.columns)
         pivot['합계']=pivot[month_cols].sum(axis=1)
         pivot=pivot.sort_values('합계',ascending=False)
-        id_info=ba.set_index('주문자 ID')[['상호명','주문자명','주문자 구분','회원 등급']]
+        id_info=ba.set_index('주문자 ID')[['상호명','주문자 구분','회원 등급']]
         pivot=pivot.join(id_info,how='left')
-        cols_order=['상호명','주문자명','주문자 구분','회원 등급']+month_cols+['합계']
+        cols_order=['상호명','주문자 구분','회원 등급']+month_cols+['합계']
         pivot=pivot[cols_order]
         if search: pivot=pivot[pivot.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
         for c in month_cols+['합계']: pivot[c]=pd.to_numeric(pivot[c],errors='coerce').fillna(0)
         st.caption(f"{len(pivot):,}개 기관 표시 중")
-        st.write("DEBUG dtypes:", pivot[month_cols+['합계']].dtypes.astype(str).to_dict())
-        st.dataframe(pivot.style.format({c:'{:,.0f}원' for c in month_cols+['합계']}),use_container_width=True,height=550)
+        disp=pivot.copy()
+        for c in month_cols+['합계']: disp[c]=disp[c].map(lambda v:f"{v:,.0f}원")
+        st.dataframe(disp,use_container_width=True,height=550)
 
 def render_product_pareto(kp=""):
     st.markdown("#### 상품별 매출 TOP 20 (파레토 차트)")
