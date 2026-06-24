@@ -1069,10 +1069,18 @@ def render_grade_sales_bar(kp=""):
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"grade_sales"))
 
 def render_grade_monthly_buyers(kp=""):
-    st.markdown("#### 회원등급별 × 월별 구매처 수")
-    st.caption("각 월에 주문한 고유 거래처 수 (매월 독립 집계)")
-    g = filtered.groupby(['회원 등급','주문월'])['주문자 ID'].nunique().reset_index(name='구매처수')
-    pivot = g.pivot_table(index='회원 등급', columns='주문월', values='구매처수', aggfunc='sum', fill_value=0)
+    st.markdown("#### 회원등급별 × 월별 집계")
+    metric = st.radio("집계 기준", ["구매처 수", "매출액"], horizontal=True,
+        key=f"{kp}_gmb_metric" if kp else "gmb_metric_main")
+    if metric == "구매처 수":
+        st.caption("각 월에 주문한 고유 거래처 수 (매월 독립 집계)")
+        g = filtered.groupby(['회원 등급','주문월'])['주문자 ID'].nunique().reset_index(name='값')
+        fmt, unit = '{:,.0f}처', '처'
+    else:
+        st.caption("각 월의 회원등급별 판매합계금액")
+        g = filtered.groupby(['회원 등급','주문월'])['판매합계금액'].sum().reset_index(name='값')
+        fmt, unit = '{:,.0f}원', '원'
+    pivot = g.pivot_table(index='회원 등급', columns='주문월', values='값', aggfunc='sum', fill_value=0)
     pivot.columns = [to_ym_kr(c) for c in pivot.columns]
     pivot.columns.name = None
     month_cols = list(pivot.columns)
@@ -1081,7 +1089,7 @@ def render_grade_monthly_buyers(kp=""):
     pivot.loc['합계'] = {c: pivot[c].sum() for c in month_cols+['합계']}
     sr = st.text_input("🔍 회원등급 검색", key=f"{kp}_gmb_search" if kp else "gmb_search_main")
     if sr: pivot = pivot[pivot.index.str.contains(sr, case=False, na=False) | (pivot.index=='합계')]
-    st.dataframe(pivot[month_cols+['합계']].style.format('{:,.0f}처'), use_container_width=True, height=450)
+    st.dataframe(pivot[month_cols+['합계']].style.format(fmt), use_container_width=True, height=450)
 
 def render_heatmap_dow_hour(kp=""):
     st.markdown("#### 요일 · 시간대별 주문 매출 히트맵")
