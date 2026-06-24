@@ -1116,8 +1116,10 @@ def render_org_sales_table(kp=""):
     else:
         pivot=filtered.groupby(['주문자 ID','주문월'])['판매합계금액'].sum().reset_index()
         pivot=pivot.pivot_table(index='주문자 ID',columns='주문월',values='판매합계금액',aggfunc='sum',fill_value=0)
+        pivot=pivot[[c for c in pivot.columns if pd.notna(c) and str(c).strip() not in ['','NaT','nan']]]
         pivot.columns=[to_ym_kr(c) for c in pivot.columns]
         pivot.columns.name=None
+        pivot=pivot.T.groupby(level=0).sum().T
         month_cols=list(pivot.columns)
         pivot['합계']=pivot[month_cols].sum(axis=1)
         pivot=pivot.sort_values('합계',ascending=False)
