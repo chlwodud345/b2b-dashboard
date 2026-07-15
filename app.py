@@ -258,7 +258,7 @@ def name_similarity(a, b):
     if prefix_len >= 2: base = min(100, base + prefix_len * 5)
     return base
 
-@st.cache_data(ttl=3600, show_spinner="🏥 일차의료 시범기관 데이터를 불러오는 중...")
+@st.cache_data(ttl=86400, show_spinner="🏥 일차의료 시범기관 데이터를 불러오는 중...")
 def load_pilot_clinics():
     from urllib.parse import quote
     all_frames = []
@@ -358,7 +358,7 @@ def download_from_gdrive(file_id):
     os.remove(tmp)
     return io.BytesIO(content)
 
-@st.cache_data(ttl=3600, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...", max_entries=1)
+@st.cache_data(ttl=86400, show_spinner="📥 구글 드라이브에서 데이터를 불러오는 중...", max_entries=1)
 def load_from_gdrive():
     fb = download_from_gdrive(GDRIVE_FILE_ID)
     o = pd.read_excel(fb, sheet_name='주문내역', header=1, engine='openpyxl'); fb.seek(0)
