@@ -1121,10 +1121,10 @@ def render_org_sales_table(kp=""):
 
     # 검색창: 모드에 따라 라벨 변경
     if view_mode=="기관→품목×월":
-        search=st.text_input("🔍 상호명/아이디 검색 (예: 클로드병원)",
+        search=st.text_input("🔍 상호명/아이디 검색",
             key=f"{kp}_org_search" if kp else "org_search_main")
     elif view_mode=="품목→기관×월":
-        search=st.text_input("🔍 상품명/상품코드/ERP 상품 ID 검색 (예: 뉴케어당뇨식, 1025115)",
+        search=st.text_input("🔍 상품명/상품코드/ERP 상품 ID 검색 (예: 뉴케어 구수한맛, 1025115)",
             key=f"{kp}_org_search" if kp else "org_search_main")
     else:
         search=st.text_input("🔍 검색 (아이디, 상호명)",
@@ -1168,7 +1168,7 @@ def render_org_sales_table(kp=""):
         val_col = '판매합계금액' if metric=="매출액" else '주문 수량'
         fmt_str = '{:,.0f}원' if metric=="매출액" else '{:,.0f}'
         if not search:
-            hint = "기관을 검색하세요. 예: 클로드병원" if view_mode=="기관→품목×월" else "품목을 검색하세요. 예: 뉴케어당뇨식"
+            hint = "기관을 검색하세요." if view_mode=="기관→품목×월" else "품목을 검색하세요. 예: 뉴케어 구수한맛"
             st.info(hint); return
 
         sl=search.lower()
