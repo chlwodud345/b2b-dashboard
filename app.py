@@ -1108,8 +1108,29 @@ def render_org_sales_table(kp=""):
     ).reset_index()
     ba['객단가']=(ba['매출']/ba['주문건수']).round(0)
     ba['상호명']=ba['주문자 ID'].map(lambda x:member_lookup.get(x,{}).get('상호명',''))
-    search=st.text_input("🔍 검색 (아이디, 상호명)",key=f"{kp}_org_search" if kp else "org_search_main")
-    view_mode=st.radio("표시 방식",["합계","월별"],horizontal=True,key=f"{kp}_org_view" if kp else "org_view_main")
+
+    view_mode=st.radio("표시 방식",["합계","월별","기관→품목×월","품목→기관×월"],horizontal=True,
+        key=f"{kp}_org_view" if kp else "org_view_main")
+    drill = view_mode in ("기관→품목×월","품목→기관×월")
+
+    # 지표(매출/수량) 토글: 드릴 모드에서만 노출
+    metric="매출액"
+    if drill:
+        metric=st.radio("지표",["매출액","수량"],horizontal=True,
+            key=f"{kp}_org_metric" if kp else "org_metric_main")
+
+    # 검색창: 모드에 따라 라벨 변경
+    if view_mode=="기관→품목×월":
+        search=st.text_input("🔍 상호명/아이디 검색 (예: 클로드병원)",
+            key=f"{kp}_org_search" if kp else "org_search_main")
+    elif view_mode=="품목→기관×월":
+        search=st.text_input("🔍 상품명/상품코드/ERP 상품 ID 검색 (예: 뉴케어당뇨식, 1025115)",
+            key=f"{kp}_org_search" if kp else "org_search_main")
+    else:
+        search=st.text_input("🔍 검색 (아이디, 상호명)",
+            key=f"{kp}_org_search" if kp else "org_search_main")
+
+    # ── 기존: 합계 ──
     if view_mode=="합계":
         agg=filtered.groupby('주문자 ID').agg(매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),최근주문일=('주문일자','max')).reset_index()
         agg['객단가']=(agg['매출']/agg['주문건수']).round(0)
@@ -1118,7 +1139,9 @@ def render_org_sales_table(kp=""):
         agg=agg[['주문자 ID','상호명','주문자 구분','회원 등급','주문건수','매출','객단가','최근주문일']].sort_values('매출',ascending=False).reset_index(drop=True)
         if search: agg=agg[agg.apply(lambda r:search.lower() in str(r).lower(),axis=1)]
         st.dataframe(agg.style.format({'매출':'{:,.0f}원','주문건수':'{:,.0f}건','객단가':'{:,.0f}원'}),use_container_width=True,height=550)
-    else:
+
+    # ── 기존: 월별 ──
+    elif view_mode=="월별":
         pivot=filtered.groupby(['주문자 ID','주문월'])['판매합계금액'].sum().reset_index()
         pivot=pivot.pivot_table(index='주문자 ID',columns='주문월',values='판매합계금액',aggfunc='sum',fill_value=0)
         pivot=pivot[[c for c in pivot.columns if pd.notna(c) and str(c).strip() not in ['','NaT','nan']]]
@@ -1139,6 +1162,69 @@ def render_org_sales_table(kp=""):
         disp=pivot.copy()
         for c in month_cols+['합계']: disp[c]=disp[c].map(lambda v:f"{v:,.0f}원")
         st.dataframe(disp,use_container_width=True,height=550)
+
+    # ── 신규: 드릴다운 (기관→품목×월 / 품목→기관×월) ──
+    else:
+        val_col = '판매합계금액' if metric=="매출액" else '주문 수량'
+        fmt_str = '{:,.0f}원' if metric=="매출액" else '{:,.0f}'
+        if not search:
+            hint = "기관을 검색하세요. 예: 클로드병원" if view_mode=="기관→품목×월" else "품목을 검색하세요. 예: 뉴케어당뇨식"
+            st.info(hint); return
+
+        sl=search.lower()
+        if view_mode=="기관→품목×월":
+            # 검색 대상: 상호명 / 아이디  → 행: 상품명
+            id_to_org=ba.drop_duplicates('주문자 ID').set_index('주문자 ID')['상호명'].to_dict()
+            df=filtered.copy()
+            df['상호명']=df['주문자 ID'].map(id_to_org).fillna('')
+            hit=df[df.apply(lambda r: sl in str(r['상호명']).lower() or sl in str(r['주문자 ID']).lower(), axis=1)]
+            row_key='상품명'; sel_key='상호명'; kind='기관'; row_label='상품명'
+        else:
+            # 검색 대상: 상품명 / 상품 코드 / ERP 상품 ID  → 행: 상호명(+구분·등급)
+            df=filtered.copy()
+            hit=df[df.apply(lambda r: sl in str(r['상품명']).lower() or sl in str(r['상품 코드']).lower() or sl in str(r.get('ERP 상품 ID','')).lower(), axis=1)]
+            row_key='주문자 ID'; sel_key='상품명'; kind='품목'; row_label='상호명'
+
+        if hit.empty:
+            st.warning("검색 결과가 없습니다."); return
+
+        pivot=hit.groupby([row_key,'주문월'])[val_col].sum().reset_index()
+        pivot=pivot.pivot_table(index=row_key,columns='주문월',values=val_col,aggfunc='sum',fill_value=0)
+        pivot.columns=[to_ym_kr(c) for c in pivot.columns]
+        pivot.columns.name=None
+        month_cols=list(pivot.columns)
+        pivot['합계']=pivot[month_cols].sum(axis=1)
+        pivot=pivot.sort_values('합계',ascending=False)
+
+        if view_mode=="품목→기관×월":
+            # 행이 주문자 ID → 상호명·구분·등급 덧붙임
+            info=ba.drop_duplicates('주문자 ID').set_index('주문자 ID')[['상호명','주문자 구분','회원 등급']]
+            pivot=pivot.join(info,how='left')
+            pivot['상호명']=pivot['상호명'].fillna(''); pivot['주문자 구분']=pivot['주문자 구분'].fillna(''); pivot['회원 등급']=pivot['회원 등급'].fillna('')
+            pivot=pivot.reset_index(drop=True) if False else pivot.reset_index()
+            # 합계행
+            total={'상호명':'합계','주문자 구분':'','회원 등급':''}
+            for c in month_cols+['합계']: total[c]=pivot[c].sum()
+            pivot=pd.concat([pivot,pd.DataFrame([total])],ignore_index=True)
+            cols_order=['상호명','주문자 구분','회원 등급']+month_cols+['합계']
+            pivot=pivot[cols_order]
+        else:
+            # 행이 상품명 → 부가컬럼 없음
+            pivot=pivot.reset_index().rename(columns={row_key:'상품명'})
+            total={'상품명':'합계'}
+            for c in month_cols+['합계']: total[c]=pivot[c].sum()
+            pivot=pd.concat([pivot,pd.DataFrame([total])],ignore_index=True)
+            cols_order=['상품명']+month_cols+['합계']
+            pivot=pivot[cols_order]
+
+        # 다건 매칭 캡션 보완
+        matched=sorted(hit[sel_key].dropna().unique().tolist())
+        if len(matched)>1:
+            st.caption(f"⚠️ 검색 '{search}'에 {kind} {len(matched)}개 매칭 → {', '.join(matched)} 합산 표시 · {metric} 기준")
+        else:
+            st.caption(f"검색 '{search}' → {matched[0] if matched else search} · {len(pivot)-1}개 {row_label} · {metric} 기준")
+
+        st.dataframe(pivot.style.format({c:fmt_str for c in month_cols+['합계']}),use_container_width=True,height=550)
 
 def render_product_pareto(kp=""):
     st.markdown("#### 상품별 매출 TOP 20 (파레토 차트)")
