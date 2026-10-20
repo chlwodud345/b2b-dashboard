@@ -1103,6 +1103,15 @@ def render_heatmap_dow_hour(kp=""):
 
 def render_org_sales_table(kp=""):
     st.markdown("#### 기관별 매출 현황")
+    def _ym_sort_key(c):
+        # 주문월 원본(YYYY-MM, YYYY-M, YYYY.M 등)을 (연, 월) 튜플로 변환해 정렬
+        import re
+        m=re.findall(r'\d+', str(c))
+        if len(m)>=2: return (int(m[0]), int(m[1]))
+        if len(m)==1:
+            s=m[0]
+            return (int(s[:4]), int(s[4:])) if len(s)>=6 else (int(s), 0)
+        return (9999, 99)
     ba = filtered.groupby(['주문자 ID','주문자명','주문자 구분','회원 등급']).agg(
         매출=('판매합계금액','sum'),주문건수=('주문 ID','nunique'),최근주문일=('주문일자','max')
     ).reset_index()
@@ -1121,10 +1130,10 @@ def render_org_sales_table(kp=""):
 
     # 검색창: 모드에 따라 라벨 변경
     if view_mode=="기관→품목×월":
-        search=st.text_input("🔍 상호명/아이디 검색",
+        search=st.text_input("🔍 상호명/아이디 검색 (예: 클로드병원)",
             key=f"{kp}_org_search" if kp else "org_search_main")
     elif view_mode=="품목→기관×월":
-        search=st.text_input("🔍 상품명/상품코드/ERP 상품 ID 검색 (예: 뉴케어 구수한맛, 1025115)",
+        search=st.text_input("🔍 상품명/상품코드/ERP 상품 ID 검색 (예: 뉴케어당뇨식, 1025115)",
             key=f"{kp}_org_search" if kp else "org_search_main")
     else:
         search=st.text_input("🔍 검색 (아이디, 상호명)",
@@ -1145,9 +1154,10 @@ def render_org_sales_table(kp=""):
         pivot=filtered.groupby(['주문자 ID','주문월'])['판매합계금액'].sum().reset_index()
         pivot=pivot.pivot_table(index='주문자 ID',columns='주문월',values='판매합계금액',aggfunc='sum',fill_value=0)
         pivot=pivot[[c for c in pivot.columns if pd.notna(c) and str(c).strip() not in ['','NaT','nan']]]
+        # 한글 변환 전에 원본 주문월(YYYY-MM) 기준으로 연·월 정렬
+        pivot=pivot[sorted(pivot.columns, key=lambda c:_ym_sort_key(c))]
         pivot.columns=[to_ym_kr(c) for c in pivot.columns]
         pivot.columns.name=None
-        pivot=pivot.T.groupby(level=0).sum().T
         month_cols=list(pivot.columns)
         pivot['합계']=pivot[month_cols].sum(axis=1)
         pivot=pivot.sort_values('합계',ascending=False)
@@ -1168,7 +1178,7 @@ def render_org_sales_table(kp=""):
         val_col = '판매합계금액' if metric=="매출액" else '주문 수량'
         fmt_str = '{:,.0f}원' if metric=="매출액" else '{:,.0f}'
         if not search:
-            hint = "기관을 검색하세요" if view_mode=="기관→품목×월" else "품목을 검색하세요. 예: 뉴케어 구수한맛"
+            hint = "기관을 검색하세요. 예: 클로드병원" if view_mode=="기관→품목×월" else "품목을 검색하세요. 예: 뉴케어당뇨식"
             st.info(hint); return
 
         sl=search.lower()
@@ -1190,6 +1200,8 @@ def render_org_sales_table(kp=""):
 
         pivot=hit.groupby([row_key,'주문월'])[val_col].sum().reset_index()
         pivot=pivot.pivot_table(index=row_key,columns='주문월',values=val_col,aggfunc='sum',fill_value=0)
+        # 한글 변환 전에 원본 주문월(YYYY-MM) 기준으로 연·월 정렬
+        pivot=pivot[sorted(pivot.columns, key=lambda c:_ym_sort_key(c))]
         pivot.columns=[to_ym_kr(c) for c in pivot.columns]
         pivot.columns.name=None
         month_cols=list(pivot.columns)
