@@ -1047,9 +1047,9 @@ def render_daily_sales_trend(kp=""):
             st.dataframe(daily_tbl.style.format({'매출':'{:,.0f}원'}),use_container_width=True,height=400)
         else:
             monthly_tbl = filtered.groupby('주문월')['판매합계금액'].sum().reset_index()
+            monthly_tbl = monthly_tbl.sort_values('주문월', ascending=False).reset_index(drop=True)
             monthly_tbl.columns = ['월','매출']
             monthly_tbl['월'] = ym_series_kr(monthly_tbl['월'])
-            monthly_tbl = monthly_tbl.sort_values('월', ascending=False).reset_index(drop=True)
             monthly_tbl.loc[len(monthly_tbl)] = ['합계', monthly_tbl['매출'].sum()]
             st.dataframe(monthly_tbl.style.format({'매출':'{:,.0f}원'}),use_container_width=True,height=400)
 
@@ -1543,9 +1543,10 @@ def render_dealer_commission(kp=""):
     ).reset_index()
     pivot_sales = dealer_monthly.pivot(index='추천인명(상호명)', columns='정산월_key', values='피추천인매출').fillna(0)
     pivot_comm = dealer_monthly.pivot(index='추천인명(상호명)', columns='정산월_key', values='판매수수료').fillna(0)
-    pivot_sales.columns = pd.MultiIndex.from_tuples([(to_ym_kr(c),'피추천인매출') for c in pivot_sales.columns])
-    pivot_comm.columns = pd.MultiIndex.from_tuples([(to_ym_kr(c),'판매수수료') for c in pivot_comm.columns])
+    pivot_sales.columns = pd.MultiIndex.from_tuples([(c,'피추천인매출') for c in pivot_sales.columns])
+    pivot_comm.columns = pd.MultiIndex.from_tuples([(c,'판매수수료') for c in pivot_comm.columns])
     combined = pd.concat([pivot_sales, pivot_comm], axis=1).sort_index(axis=1)
+    combined.columns = pd.MultiIndex.from_tuples([(to_ym_kr(a),b) for a,b in combined.columns])
     combined.loc['합계'] = combined.sum()
     st.dataframe(combined.style.format('{:,.0f}원'), use_container_width=True,
         height=550)
