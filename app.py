@@ -1731,7 +1731,7 @@ def render_pnl_monthly_trend(kp=""):
     bw_monthly['영업이익률']=np.where(bw_monthly['매출액']!=0,bw_monthly['영업이익']/bw_monthly['매출액']*100,0)
     bw_monthly['연월_kr']=ym_series_kr(bw_monthly['연월'])
     fig=make_subplots(specs=[[{"secondary_y":True}]])
-    for col_name,color,name in [('매출액','#3366CC','매출액'),('매출총이익','#27AE60','매출총이익'),('영업이익','#E8853D','영업이익')]:
+    for col_name,color,name in [('매출액','#3366CC','매출액'),('매출총이익','#27AE60','매출총이익'),('판관비','#9B59B6','판관비'),('영업이익','#E8853D','영업이익')]:
         fig.add_trace(go.Bar(x=bw_monthly['연월_kr'],y=bw_monthly[col_name],name=name,marker_color=color,opacity=0.85,hovertemplate='%{x}<br>'+name+': %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in bw_monthly[col_name]]),secondary_y=False)
     fig.add_trace(go.Scatter(x=bw_monthly['연월_kr'],y=bw_monthly['영업이익률'],name='영업이익률',line=dict(color='#E74C3C',width=3),mode='lines+markers+text',marker=dict(size=8),text=[f"{v:.1f}%" for v in bw_monthly['영업이익률']],textposition='top center',textfont=dict(size=11,color='#E74C3C'),hovertemplate='%{x}<br>영업이익률: %{y:.1f}%<extra></extra>'),secondary_y=True)
     fig.update_layout(height=500,barmode='group',margin=dict(l=80,r=60,t=50,b=70),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(tickfont=dict(size=12)))
