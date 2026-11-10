@@ -1727,7 +1727,7 @@ def render_pnl_monthly_trend(kp=""):
     st.markdown("#### 월별 손익 추이")
     if len(bw_filtered)==0: st.warning("BW 데이터 없음"); return
     bw=bw_filtered.copy()
-    bw_monthly=bw.groupby('연월').agg(매출액=('I.매출액(FI기준)','sum'),매출총이익=('III.매출총이익','sum'),영업이익=('V.영업이익I','sum')).reset_index().sort_values('연월')
+    bw_monthly=bw.groupby('연월').agg(매출액=('I.매출액(FI기준)','sum'),매출총이익=('III.매출총이익','sum'),판관비=('IV.판매비 및 관리비','sum'),영업이익=('V.영업이익I','sum')).reset_index().sort_values('연월')
     bw_monthly['영업이익률']=np.where(bw_monthly['매출액']!=0,bw_monthly['영업이익']/bw_monthly['매출액']*100,0)
     bw_monthly['연월_kr']=ym_series_kr(bw_monthly['연월'])
     fig=make_subplots(specs=[[{"secondary_y":True}]])
@@ -1735,7 +1735,7 @@ def render_pnl_monthly_trend(kp=""):
         fig.add_trace(go.Bar(x=bw_monthly['연월_kr'],y=bw_monthly[col_name],name=name,marker_color=color,opacity=0.85,hovertemplate='%{x}<br>'+name+': %{customdata}<extra></extra>',customdata=[f"{v:,.0f}원" for v in bw_monthly[col_name]]),secondary_y=False)
     fig.add_trace(go.Scatter(x=bw_monthly['연월_kr'],y=bw_monthly['영업이익률'],name='영업이익률',line=dict(color='#E74C3C',width=3),mode='lines+markers+text',marker=dict(size=8),text=[f"{v:.1f}%" for v in bw_monthly['영업이익률']],textposition='top center',textfont=dict(size=11,color='#E74C3C'),hovertemplate='%{x}<br>영업이익률: %{y:.1f}%<extra></extra>'),secondary_y=True)
     fig.update_layout(height=500,barmode='group',margin=dict(l=80,r=60,t=50,b=70),legend=dict(orientation="h",yanchor="bottom",y=1.02,x=0,font=dict(size=11)),xaxis=dict(tickfont=dict(size=12)))
-    monthly_tvals,monthly_ttexts=krw_tickvals(bw_monthly[['매출액','매출총이익','영업이익']].abs().max())
+    monthly_tvals,monthly_ttexts=krw_tickvals(bw_monthly[['매출액','매출총이익','판관비','영업이익']].abs().max())
     fig.update_yaxes(title_text="금액",tickvals=monthly_tvals,ticktext=monthly_ttexts,tickfont=dict(size=11),secondary_y=False)
     fig.update_yaxes(title_text="영업이익률 (%)",tickfont=dict(size=11),ticksuffix='%',secondary_y=True)
     st.plotly_chart(fig, use_container_width=True, key=_k(kp,"pnl_monthly"))
